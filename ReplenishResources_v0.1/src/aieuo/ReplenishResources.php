@@ -55,7 +55,11 @@ class ReplenishResources extends PluginBase implements Listener{
 						return true;
 					}
 					$this->addbreak[$name] = $args[1];
-					$sender->sendMessage("ブロックを壊してください");
+					$sender->sendMessage("追加する看板を壊してください");
+					return true;
+				case 'del':
+					$this->delbreak[$name] = true;
+					$sender->sendMessage("削除する看板を壊してください");
 					return true;
     		}
     		return true;
@@ -113,6 +117,17 @@ class ReplenishResources extends PluginBase implements Listener{
 			$this->config->save();
 			$player->sendMessage("追加しました");
 			unset($this->addbreak[$name]);
+		}elseif(isset($this->delbreak[$name])){
+			$block = $event->getBlock();
+			$event->setCancelled();
+			if(!($block->getId() == 63 or $block->getId() == 68))return;
+    		$place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
+			if($this->config->exists($place)){
+				$this->config->remove($place);
+				$this->config->save();
+				$player->sendMessage("削除しました");
+			}
+			unset($this->delbreak[$name]);
 		}
 	}
 
