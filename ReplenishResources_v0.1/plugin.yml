@@ -1,0 +1,11 @@
+name: ReplenishResources
+main: aieuo\ReplenishResources
+version: 0.1
+api: [3.0.0-ALPHA11]
+load: POSTWORLD
+author: aieuo
+commands:
+ reso:
+  description: 好きなブロックでワールド作成
+  usage: /reso <pos1 | pos2 | add | del>
+  permission: op
