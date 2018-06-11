@@ -27,11 +27,18 @@ class ReplenishResources extends PluginBase implements Listener{
     			$sender->sendMessage("コンソールからは使用できません");
     			return true;
     		}
+    		if(!$sender->isOp()){
+    			return false;
+    		}
     		if(!isset($args[0])){
     			return false;
     		}
         	$name = $sender->getName();
     		switch ($args[0]) {
+				case 'cancel':
+					unset($this->tap[$name],$this->break[$name],$this->pos1[$name],$this->pos2[$name]);
+					$sender->sendMessage("キャンセルしました");
+					return true;
 				case 'pos1':
 					$this->break[$name] = "pos1";
 					unset($this->pos2[$name]);
@@ -56,13 +63,13 @@ class ReplenishResources extends PluginBase implements Listener{
 					}
 					$this->tap[$name] = [
 						"type" => "add",
-						"id" => $id
+						"id" => $args[1]
 					];
-					$sender->sendMessage("追加する看板を壊してください");
+					$sender->sendMessage("追加する看板をタップしてください");
 					return true;
 				case 'del':
-					$this->tap[$name]["type"] = true;
-					$sender->sendMessage("削除する看板を壊してください");
+					$this->tap[$name]["type"] = "del";
+					$sender->sendMessage("削除する看板をタップしてください");
 					return true;
     		}
     		return true;
@@ -72,9 +79,9 @@ class ReplenishResources extends PluginBase implements Listener{
 	public function onBreak(BlockBreakEvent $event){
 		$player = $event->getPlayer();
 		$name = $player->getName();
-		if(isset($this->pos1break[$name])){
-			$event->setCancelled();
+		if(isset($this->break[$name])){
 			$block = $event->getBlock();
+			$event->setCancelled();
 			switch ($this->break[$name]) {
 				case 'pos1':
 					$this->pos1[$name] = [
@@ -85,7 +92,6 @@ class ReplenishResources extends PluginBase implements Listener{
 					];
 					$player->sendMessage("設定しました(".$this->pos1[$name]["x"].",".$this->pos1[$name]["y"].",".$this->pos1[$name]["z"].",".$this->pos1[$name]["level"].")");
 					break;
-				
 				case 'pos2':
 					if($this->pos1[$name]["level"] != $block->level->getFolderName()){
 						$player->sendMessage("pos1と同じワールドに設定してください");
@@ -107,14 +113,15 @@ class ReplenishResources extends PluginBase implements Listener{
     public function onTouch(PlayerInteractEvent $event){
     	$player = $event->getPlayer();
     	$block = $event->getBlock();
+    	$name = $player->getName();
     	if(isset($this->tap[$name])){
     		switch ($this->tap[$name]["type"]) {
     			case 'add':
-					$event->setCancelled();
 					if(!($block->getId() == 63 or $block->getId() == 68)){
 						$player->sendMessage("看板を触ってください");
 						return;
 					}
+					$event->setCancelled();
 					$ids = explode(":",$this->tap[$name]["id"]);
 					if(!isset($ids[1]))$ids[1] = 0;
 					$this->config->set($block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName(),[
