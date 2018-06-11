@@ -42,7 +42,7 @@ class ReplenishResources extends PluginBase implements Listener{
 						$sender->sendMessage("まずpos1を設定してください");
 						return true;
 					}
-					$this->break[$name] "pos2";
+					$this->break[$name] = "pos2";
 					$sender->sendMessage("ブロックを壊してください");
 					return true;
 				case 'add':
