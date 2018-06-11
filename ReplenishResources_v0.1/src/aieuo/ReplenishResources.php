@@ -33,7 +33,7 @@ class ReplenishResources extends PluginBase implements Listener{
         	$name = $sender->getName();
     		switch ($args[0]) {
 				case 'pos1':
-					$this->pos1break[$name] = true;
+					$this->break[$name] = "pos1";
 					unset($this->pos2[$name]);
 					$sender->sendMessage("ブロックを壊してください");
 					return true;
@@ -42,7 +42,7 @@ class ReplenishResources extends PluginBase implements Listener{
 						$sender->sendMessage("まずpos1を設定してください");
 						return true;
 					}
-					$this->pos2break[$name] = true;
+					$this->break[$name] "pos2";
 					$sender->sendMessage("ブロックを壊してください");
 					return true;
 				case 'add':
@@ -54,11 +54,14 @@ class ReplenishResources extends PluginBase implements Listener{
 						$sender->sendMessage("まずposを設定してください");
 						return true;
 					}
-					$this->addbreak[$name] = $args[1];
+					$this->tap[$name] = [
+						"type" => "add",
+						"id" => $id
+					];
 					$sender->sendMessage("追加する看板を壊してください");
 					return true;
 				case 'del':
-					$this->delbreak[$name] = true;
+					$this->tap[$name]["type"] = true;
 					$sender->sendMessage("削除する看板を壊してください");
 					return true;
     		}
@@ -72,68 +75,82 @@ class ReplenishResources extends PluginBase implements Listener{
 		if(isset($this->pos1break[$name])){
 			$event->setCancelled();
 			$block = $event->getBlock();
-			$this->pos1[$name] = [
-				"x" => $block->x,
-				"y" => $block->y,
-				"z" => $block->z,
-				"level" => $block->level->getFolderName()
-			];
-			unset($this->pos1break[$name]);
-			$player->sendMessage("設定しました(".$this->pos1[$name]["x"].",".$this->pos1[$name]["y"].",".$this->pos1[$name]["z"].",".$this->pos1[$name]["level"].")");
-		}elseif(isset($this->pos2break[$name])){
-			$event->setCancelled();
-			$block = $event->getBlock();
-			if($this->pos1[$name]["level"] != $block->level->getFolderName()){
-				$player->sendMessage("pos1と同じワールドに設定してください");
-				return;
+			switch ($this->break[$name]) {
+				case 'pos1':
+					$this->pos1[$name] = [
+						"x" => $block->x,
+						"y" => $block->y,
+						"z" => $block->z,
+						"level" => $block->level->getFolderName()
+					];
+					$player->sendMessage("設定しました(".$this->pos1[$name]["x"].",".$this->pos1[$name]["y"].",".$this->pos1[$name]["z"].",".$this->pos1[$name]["level"].")");
+					break;
+				
+				case 'pos2':
+					if($this->pos1[$name]["level"] != $block->level->getFolderName()){
+						$player->sendMessage("pos1と同じワールドに設定してください");
+						return;
+					}
+					$this->pos2[$name] = [
+						"x" => $block->x,
+						"y" => $block->y,
+						"z" => $block->z,
+						"level" => $block->level->getFolderName()
+					];
+					$player->sendMessage("設定しました");
+					break;
 			}
-			$this->pos2[$name] = [
-				"x" => $block->x,
-				"y" => $block->y,
-				"z" => $block->z,
-				"level" => $block->level->getFolderName()
-			];
-			unset($this->pos2break[$name]);
-			$player->sendMessage("設定しました");
-		}elseif(isset($this->addbreak[$name])){
-			$block = $event->getBlock();
-			$event->setCancelled();
-			if(!($block->getId() == 63 or $block->getId() == 68))return;
-			$ids = explode(":",$this->addbreak[$name]);
-			if(!isset($ids[1]))$ids[1] = 0;
-			$this->config->set($block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName(),[
-				"startx" => min($this->pos1[$name]["x"],$this->pos2[$name]["x"]),
-				"starty" => min($this->pos1[$name]["y"],$this->pos2[$name]["y"]),
-				"startz" => min($this->pos1[$name]["z"],$this->pos2[$name]["z"]),
-				"endx" => max($this->pos1[$name]["x"],$this->pos2[$name]["x"]),
-				"endy" => max($this->pos1[$name]["y"],$this->pos2[$name]["y"]),
-				"endz" => max($this->pos1[$name]["z"],$this->pos2[$name]["z"]),
-				"level" => $this->pos1[$name]["level"],
-				"id" => [
-					"id" => $ids[0],
-					"damage" => $ids[1]
-				]
-			]);
-			$this->config->save();
-			$player->sendMessage("追加しました");
-			unset($this->addbreak[$name]);
-		}elseif(isset($this->delbreak[$name])){
-			$block = $event->getBlock();
-			$event->setCancelled();
-			if(!($block->getId() == 63 or $block->getId() == 68))return;
-    		$place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
-			if($this->config->exists($place)){
-				$this->config->remove($place);
-				$this->config->save();
-				$player->sendMessage("削除しました");
-			}
-			unset($this->delbreak[$name]);
+			unset($this->break[$name]);
 		}
 	}
 
     public function onTouch(PlayerInteractEvent $event){
     	$player = $event->getPlayer();
     	$block = $event->getBlock();
+    	if(isset($this->tap[$name])){
+    		switch ($this->tap[$name]["type"]) {
+    			case 'add':
+					$event->setCancelled();
+					if(!($block->getId() == 63 or $block->getId() == 68)){
+						$player->sendMessage("看板を触ってください");
+						return;
+					}
+					$ids = explode(":",$this->tap[$name]["id"]);
+					if(!isset($ids[1]))$ids[1] = 0;
+					$this->config->set($block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName(),[
+						"startx" => min($this->pos1[$name]["x"],$this->pos2[$name]["x"]),
+						"starty" => min($this->pos1[$name]["y"],$this->pos2[$name]["y"]),
+						"startz" => min($this->pos1[$name]["z"],$this->pos2[$name]["z"]),
+						"endx" => max($this->pos1[$name]["x"],$this->pos2[$name]["x"]),
+						"endy" => max($this->pos1[$name]["y"],$this->pos2[$name]["y"]),
+						"endz" => max($this->pos1[$name]["z"],$this->pos2[$name]["z"]),
+						"level" => $this->pos1[$name]["level"],
+						"id" => [
+							"id" => $ids[0],
+							"damage" => $ids[1]
+						]
+					]);
+					$this->config->save();
+					$player->sendMessage("追加しました");
+    				break;
+    			case 'del':
+					if(!($block->getId() == 63 or $block->getId() == 68)){
+						$player->sendMessage("看板を触ってください");
+						return;
+					}
+		    		$place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
+					if($this->config->exists($place)){
+						$this->config->remove($place);
+						$this->config->save();
+						$player->sendMessage("削除しました");
+					}else{
+						$player->sendMessage("その場所には登録されていません");
+					}
+					break;
+    		}
+    		unset($this->tap[$name]);
+    		return;
+    	}
     	if(($block->getId() == 63 or $block->getId() == 68) and $player->isSneaking()){
     		$place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
     		$time = $this->checkTime($player->getName(),$place);
