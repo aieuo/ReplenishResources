@@ -1,11 +1,11 @@
 name: ReplenishResources
 main: aieuo\ReplenishResources
-version: 1.0
+version: 2.0
 api: [3.0.0]
 load: POSTWORLD
 author: aieuo
 commands:
  reso:
-  description: 好きなブロックでワールド作成
+  description: 人工資源補充
   usage: /reso <pos1 | pos2 | add | del | setting>
   permission: op
