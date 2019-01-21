@@ -1,19 +1,23 @@
 <?php
 namespace aieuo;
 
-use pocketmine\plugin\PluginBase;
-use pocketmine\event\Listener;
 use pocketmine\Player;
 use pocketmine\block\Block;
-use pocketmine\utils\Config;
-use pocketmine\math\Vector3;
-use pocketmine\event\block\BlockBreakEvent;
-use pocketmine\event\player\PlayerInteractEvent;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\command\ConsoleCommandSender;
+use pocketmine\event\Listener;
+use pocketmine\event\block\BlockBreakEvent;
+use pocketmine\event\player\PlayerInteractEvent;
+use pocketmine\event\server\DataPacketReceiveEvent;
+use pocketmine\network\mcpe\protocol\ModalFormRequestPacket;
+use pocketmine\network\mcpe\protocol\ModalFormResponsePacket;
+use pocketmine\math\Vector3;
+use pocketmine\plugin\PluginBase;
+use pocketmine\utils\Config;
 
 class ReplenishResources extends PluginBase implements Listener{
+
     public function onEnable(){
         $this->getServer()->getPluginManager()->registerEvents($this,$this);
         if(!file_exists($this->getDataFolder())) @mkdir($this->getDataFolder(), 0721, true);
@@ -21,11 +25,15 @@ class ReplenishResources extends PluginBase implements Listener{
     	$this->setting = new Config($this->getDataFolder()."setting.yml", Config::YAML, [
     		"wait" => 60,
     		"sneak" => true,
-    		"announcement" => false
+    		"announcement" => false,
+    		"count" => 0
     	]);
-    	$this->wait = $this->setting->get("wait");
-    	$this->sneak = (int)$this->setting->get("sneak");
-    	$this->announce = $this->setting->get("announcement");
+
+    	$this->formIds = [
+    		"settings" => mt_rand(0, 99999999),
+    		"wait" => mt_rand(0, 99999999),
+    		"count" => mt_rand(0, 99999999)
+    	];
     }
 
     public function onDisable(){
@@ -39,57 +47,14 @@ class ReplenishResources extends PluginBase implements Listener{
     			$sender->sendMessage("コンソールからは使用できません");
     			return true;
     		}
-    		if(!$sender->isOp()){
-    			return false;
-    		}
-    		if(!isset($args[0])){
+    		if(!$sender->isOp() or !isset($args[0])){
     			return false;
     		}
         	$name = $sender->getName();
     		switch ($args[0]) {
     			case 'setting':
-    				if(!isset($args[2])){
-    					$sender->sendMessage("/reso setting <wait | sneak | announce>");
-    					return true;
-    				}
-    				switch ($args[1]) {
-    					case 'wait':
-    						$wait = (int)$args[2];
-    						if($wait < 0){
-    							$sender->sendMessage("0秒以上で指定してください");
-    							return true;
-    						}
-    						$this->setting->set("wait", $wait);
-    						$sender->sendMessage($wait."秒に設定しました");
-    						$this->wait = $wait;
-    						break;
-    					case 'sneak':
-    						if($args[2] == "on"){
-    							$this->setting->set("sneak", true);
-    							$sender->sendMessage("スニークしないと補充できないようになりました");
-    							$this->sneak = true;
-    						}elseif($args[2] == "off"){
-    							$this->setting->set("sneak", false);
-    							$sender->sendMessage("スニークしなくても補充できるようになりました");
-    							$this->sneak = false;
-    						}
-    						break;
-    					case 'announce':
-    						if($args[2] == "on"){
-    							$this->setting->set("announcement", true);
-    							$sender->sendMessage("補充するときにサーバーにいる全員にメッセージを送るようにしました");
-    							$this->announce = true;
-    						}elseif($args[2] == "off"){
-    							$this->setting->set("announcement", false);
-    							$sender->sendMessage("補充するときに全員にメッセージを送らないようにしました");
-    							$this->announce = false;
-    						}
-    						break;
-    					default:
-	    					$sender->sendMessage("/reso setting <wait | sneak | anounce>");
-	    					break;
-    				}
-    				return true;
+            		$this->sendSettingForm($sender);
+            		return true;
 				case 'cancel':
 					unset($this->tap[$name],$this->break[$name],$this->pos1[$name],$this->pos2[$name]);
 					$sender->sendMessage("キャンセルしました");
@@ -216,37 +181,38 @@ class ReplenishResources extends PluginBase implements Listener{
     	if(($block->getId() == 63 or $block->getId() == 68)){
 	    	$place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
 	    	if($this->config->exists($place)){
-	    		if($this->sneak == true and !$player->isSneaking()){
+	    		if($this->setting->get("sneak") and !$player->isSneaking()){
 	    			$player->sendMessage("スニークしながらタップすると補充します");
 	    			return;
 	    		}
-	    		if($this->wait !== 0){
+	    		if((float)$this->setting->get("wait") > 0){
 		    		$time = $this->checkTime($player->getName(), $place);
-		    		if($time == false){
-		    			$player->sendMessage($this->wait."秒以内に使用しています\nしばらくお待ちください");
+		    		if($time !== true){
+		    			$player->sendMessage((float)$this->setting->get("wait")."秒以内に使用しています\nあと".round($time)."秒お待ちください");
 		    			return;
 		    		}
 		    	}
 	    		$datas = $this->config->get($place);
+	    		$check = (int)$this->setting->get("count");
 	    		$count = $this->countBlocks($datas);
-	    		if($count != 0){
+	    		if($check >= 0 and $count > $check){
 	    			$player->sendMessage("まだブロックが残っています");
 	    			return;
 	    		}
-	    		if($this->announce == true)$this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
+	    		if($this->setting->get("announcement"))$this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
 	    		$this->setBlocks($datas);
 	    	}
 	    }
     }
 
-    public function checkTime($name,$type){
+    public function checkTime($name, $type){
     	if(!isset($this->time[$name][$type])){
 			$this->time[$name][$type] = microtime(true);
 			return true;
     	}
     	$time = microtime(true) -$this->time[$name][$type];
-    	if($time <= $this->wait){
-    		return false;
+    	if($time <= (float)$this->setting->get("wait")){
+    		return $this->wait - $time;
     	}
 		$this->time[$name][$type] = microtime(true);
     	return true;
@@ -291,5 +257,173 @@ class ReplenishResources extends PluginBase implements Listener{
 		    	}
 	    	}
     	}
+    }
+
+    public function sendSettingForm($player) {
+    	if($this->setting->get("sneak") === false) {
+    		$sneak = "[スニーク] 今は§cOFF§r (スニークしなくても反応します)";
+    	} else {
+    		$sneak = "[スニーク] 今は§bON§r (スニークしないと反応しません)";
+    	}
+    	if($this->setting->get("announcement") === false) {
+    		$announcement = "[アナウンス] 今は§cOFF§r (補充時にみんなに知らせません)";
+    	} else {
+    		$announcement = "[アナウンス] 今は§bON§r (補充時にみんなに知らせます)";
+    	}
+    	if(($time = (float)$this->setting->get("wait")) <= 0) {
+    		$wait = "[連続補充の制限] 今は§cOFF§r (連続補充を制限しません)";
+    	} else {
+    		$wait = "[連続補充の制限] 今は§bON§r (同じ看板のタップを".$time."秒間制限します)";
+    	}
+    	if(($check = (int)$this->setting->get("count")) === -1) {
+    		$count = "[残さずに掘る] 今は§cOFF§r (ブロックが残っていても補充します)";
+    	} else {
+    		$count = "[残さずに掘る] 今は§bON§r (残っているブロックが".$check."個以下の時だけ補充します)";
+    	}
+        $data = [
+            "type" => "form",
+            "title" => "設定",
+            "content" => "§7ボタンを押してください",
+            "buttons" => [
+            	["text" => $sneak],
+            	["text" => $announcement],
+            	["text" => $wait],
+            	["text" => $count]
+            ]
+        ];
+        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
+        $pk = new ModalFormRequestPacket();
+        $pk->formId = $this->formIds["settings"];
+        $pk->formData = $json;
+        $player->dataPacket($pk);
+    }
+
+    public function sendWaitSettingForm($player, $mes = "") {
+        $data = [
+            "type" => "custom_form",
+            "title" => "設定 > 連続補充の制限",
+            "content" => [
+            	[
+		            "type" => "input",
+		            "text" => ($mes === "" ? "" : $mes."\n")."制限する秒数を入力してください",
+		            "default" => (string)$this->setting->get("wait"),
+		            "placeholder" => "0秒より長く設定してください"
+		        ],
+		        [
+		            "type" => "toggle",
+		            "text" => "初期の状態に戻す (60秒)"
+		        ]
+            ]
+        ];
+        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
+        $pk = new ModalFormRequestPacket();
+        $pk->formId = $this->formIds["wait"];
+        $pk->formData = $json;
+        $player->dataPacket($pk);
+    }
+
+    public function sendCountSettingForm($player, $mes = "") {
+        $data = [
+            "type" => "custom_form",
+            "title" => "設定 > 残さずに掘る",
+            "content" => [
+            	[
+		            "type" => "input",
+		            "text" => ($mes === "" ? "" : $mes."\n")."残っていてもいいブロックの数を入力してください",
+		            "default" => (string)$this->setting->get("count"),
+		            "placeholder" => "0個以上で設定してください"
+		        ]
+            ]
+        ];
+        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
+        $pk = new ModalFormRequestPacket();
+        $pk->formId = $this->formIds["count"];
+        $pk->formData = $json;
+        $player->dataPacket($pk);
+    }
+
+    public function Receive(DataPacketReceiveEvent $event){
+        $pk = $event->getPacket();
+        $player = $event->getPlayer();
+        $name = $player->getName();
+        if($pk instanceof ModalFormResponsePacket){
+        	if($pk->formId === $this->formIds["settings"]) {
+            	$data = json_decode($pk->formData);
+            	if($data === null) return;
+            	switch($data) {
+            		case 0:
+				    	if($this->setting->get("sneak") === false) {
+				    		$this->setting->set("sneak", true);
+				    		$player->sendMessage("スニークをオンにしました");
+				    	} else {
+				    		$this->setting->set("sneak", false);
+				    		$player->sendMessage("スニークをオフにしました");
+				    	}
+				    	break;
+            		case 1:
+				    	if($this->setting->get("announcement") === false) {
+				    		$this->setting->set("announcement", true);
+				    		$player->sendMessage("アナウンスをオンにしました");
+				    	} else {
+				    		$this->setting->set("announcement", false);
+				    		$player->sendMessage("アナウンスをオフにしました");
+				    	}
+				    	break;
+            		case 2:
+				    	if((float)$this->setting->get("wait") <= 0) {
+				    		$this->sendWaitSettingForm($player);
+				    		return;
+				    	} else {
+				    		$this->setting->set("wait", 0);
+				    		$player->sendMessage("連続補充の制限をオフにしました");
+				    	}
+				    	break;
+            		case 3:
+				    	if((int)$this->setting->get("count") === -1) {
+				    		$this->sendCountSettingForm($player);
+				    		return;
+				    	} else {
+				    		$this->setting->set("count", -1);
+				    		$player->sendMessage("ブロックが残っていても補充するようにしました");
+				    	}
+				    	break;
+            	}
+            	$this->sendSettingForm($player);
+        	} elseif($pk->formId === $this->formIds["wait"]) {
+            	$data = json_decode($pk->formData);
+            	if($data === null) return;
+            	if($data[1]) {
+		    		$this->setting->set("wait", 60);
+		    		$player->sendMessage("連続補充の制限を60秒に設定しました");
+            		$this->sendSettingForm($player);
+            		return;
+            	}
+            	if($data[0] === "") {
+				    $this->sendWaitSettingForm($player, "§c必要事項を記入してください§f");
+				    return;
+            	}
+            	if((float)$data[0] <= 0) {
+				    $this->sendWaitSettingForm($player, "§c0秒より大きい数を入力してください§f");
+				    return;
+            	}
+	    		$this->setting->set("wait", (float)$data[0]);
+	    		$player->sendMessage("連続補充の制限を".floatval($data[0])."秒に設定しました");
+            	$this->sendSettingForm($player);
+        	} elseif($pk->formId === $this->formIds["count"]) {
+            	$data = json_decode($pk->formData);
+            	if($data === null) return;
+            	if($data[0] === "") {
+				    $this->sendWaitSettingForm($player, "§c必要事項を記入してください§f");
+				    return;
+            	}
+            	if((int)$data[0] < 0) {
+				    $this->sendWaitSettingForm($player, "§c0以上で入力してください§f");
+				    return;
+            	}
+	    		$this->setting->set("count", (int)$data[0]);
+	    		$player->sendMessage("残っているブロックの数が".(int)$data[0]."個以下の時だけ補充するようにしました");
+            	$this->sendSettingForm($player);
+        	}
+        }
     }
 }
