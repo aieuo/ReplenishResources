@@ -18,6 +18,18 @@ class ReplenishResources extends PluginBase implements Listener{
         $this->getServer()->getPluginManager()->registerEvents($this,$this);
         if(!file_exists($this->getDataFolder())) @mkdir($this->getDataFolder(), 0721, true);
     	$this->config = new Config($this->getDataFolder()."config.yml", Config::YAML);
+    	$this->setting = new Config($this->getDataFolder()."setting.yml", Config::YAML, [
+    		"wait" => 60,
+    		"sneak" => true,
+    		"announcement" => false
+    	]);
+    	$this->wait = $this->setting->get("wait");
+    	$this->sneak = (int)$this->setting->get("sneak");
+    	$this->announce = $this->setting->get("announcement");
+    }
+
+    public function onDisable(){
+    	$this->setting->save();
     }
 
   	public function onCommand(CommandSender $sender, Command $command,string $label, array $args):bool{
@@ -35,6 +47,49 @@ class ReplenishResources extends PluginBase implements Listener{
     		}
         	$name = $sender->getName();
     		switch ($args[0]) {
+    			case 'setting':
+    				if(!isset($args[2])){
+    					$sender->sendMessage("/reso setting <wait | sneak | announce>");
+    					return true;
+    				}
+    				switch ($args[1]) {
+    					case 'wait':
+    						$wait = (int)$args[2];
+    						if($wait < 0){
+    							$sender->sendMessage("0秒以上で指定してください");
+    							return true;
+    						}
+    						$this->setting->set("wait", $wait);
+    						$sender->sendMessage($wait."秒に設定しました");
+    						$this->wait = $wait;
+    						break;
+    					case 'sneak':
+    						if($args[2] == "on"){
+    							$this->setting->set("sneak", true);
+    							$sender->sendMessage("スニークしないと補充できないようになりました");
+    							$this->sneak = true;
+    						}elseif($args[2] == "off"){
+    							$this->setting->set("sneak", false);
+    							$sender->sendMessage("スニークしなくても補充できるようになりました");
+    							$this->sneak = false;
+    						}
+    						break;
+    					case 'announce':
+    						if($args[2] == "on"){
+    							$this->setting->set("announcement", true);
+    							$sender->sendMessage("補充するときにサーバーにいる全員にメッセージを送るようにしました");
+    							$this->announce = true;
+    						}elseif($args[2] == "off"){
+    							$this->setting->set("announcement", false);
+    							$sender->sendMessage("補充するときに全員にメッセージを送らないようにしました");
+    							$this->announce = false;
+    						}
+    						break;
+    					default:
+	    					$sender->sendMessage("/reso setting <wait | sneak | anounce>");
+	    					break;
+    				}
+    				return true;
 				case 'cancel':
 					unset($this->tap[$name],$this->break[$name],$this->pos1[$name],$this->pos2[$name]);
 					$sender->sendMessage("キャンセルしました");
@@ -158,20 +213,27 @@ class ReplenishResources extends PluginBase implements Listener{
     		unset($this->tap[$name]);
     		return;
     	}
-    	if(($block->getId() == 63 or $block->getId() == 68) and $player->isSneaking()){
-    		$place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
-    		$time = $this->checkTime($player->getName(),$place);
-    		if($time == false){
-    			$player->sendMessage("1分以内に使用しています\nしばらくお待ちください");
-    			return;
-    		}
+    	if(($block->getId() == 63 or $block->getId() == 68)){
+	    	$place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
 	    	if($this->config->exists($place)){
+	    		if($this->sneak == true and !$player->isSneaking()){
+	    			$player->sendMessage("スニークしながらタップすると補充します");
+	    			return;
+	    		}
+	    		if($this->wait !== 0){
+		    		$time = $this->checkTime($player->getName(), $place);
+		    		if($time == false){
+		    			$player->sendMessage($this->wait."秒以内に使用しています\nしばらくお待ちください");
+		    			return;
+		    		}
+		    	}
 	    		$datas = $this->config->get($place);
 	    		$count = $this->countBlocks($datas);
 	    		if($count != 0){
 	    			$player->sendMessage("まだブロックが残っています");
 	    			return;
 	    		}
+	    		if($this->announce == true)$this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
 	    		$this->setBlocks($datas);
 	    	}
 	    }
@@ -183,7 +245,7 @@ class ReplenishResources extends PluginBase implements Listener{
 			return true;
     	}
     	$time = microtime(true) -$this->time[$name][$type];
-    	if($time <= 60){
+    	if($time <= $this->wait){
     		return false;
     	}
 		$this->time[$name][$type] = microtime(true);
