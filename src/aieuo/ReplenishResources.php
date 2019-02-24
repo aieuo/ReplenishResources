@@ -212,7 +212,7 @@ class ReplenishResources extends PluginBase implements Listener{
     	}
     	$time = microtime(true) -$this->time[$name][$type];
     	if($time <= (float)$this->setting->get("wait")){
-    		return $this->wait - $time;
+    		return (float)$this->setting->get("wait") - $time;
     	}
 		$this->time[$name][$type] = microtime(true);
     	return true;
