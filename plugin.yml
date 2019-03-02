@@ -7,5 +7,5 @@ author: aieuo
 commands:
  reso:
   description: 人工資源補充
-  usage: /reso <pos1 | pos2 | add | del | setting>
+  usage: /reso <pos1 | pos2 | add | del | auto | setting>
   permission: op
