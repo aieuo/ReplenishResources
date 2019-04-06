@@ -1,7 +1,7 @@
 name: ReplenishResources
 main: aieuo\ReplenishResources
-version: 2.1.0
-api: [3.0.0]
+version: 2.3.0
+api: 3.0.0
 load: POSTWORLD
 author: aieuo
 commands:

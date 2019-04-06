@@ -16,7 +16,7 @@ use pocketmine\math\Vector3;
 use pocketmine\plugin\PluginBase;
 use pocketmine\utils\Config;
 
-class ReplenishResources extends PluginBase implements Listener{
+class ReplenishResources extends PluginBase implements Listener {
 
     public function onEnable(){
         $this->getServer()->getPluginManager()->registerEvents($this,$this);
@@ -40,6 +40,7 @@ class ReplenishResources extends PluginBase implements Listener{
     }
 
     public function onDisable(){
+        $this->config->save();
         $this->setting->save();
     }
 
@@ -121,9 +122,9 @@ class ReplenishResources extends PluginBase implements Listener{
 
     public function onBreak(BlockBreakEvent $event){
         $player = $event->getPlayer();
+        $block = $event->getBlock();
         $name = $player->getName();
         if(isset($this->break[$name])){
-            $block = $event->getBlock();
             $event->setCancelled();
             switch ($this->break[$name]) {
                 case 'pos1':
@@ -151,13 +152,27 @@ class ReplenishResources extends PluginBase implements Listener{
             }
             unset($this->break[$name]);
         }
+        if($block->getId() == 63 or $block->getId() == 68) {
+            $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
+            if($this->config->exists($place)) {
+                if(!$player->isOp()) {
+                    $player->sendMessage("§cこの看板は壊せません");
+                    $event->setCancelled();
+                    return;
+                }
+                $player->sendMessage("補充看板を壊しました");
+                $this->config->remove($place);
+            }
+        }
     }
 
-    public function onTouch(PlayerInteractEvent $event){
+    public function onTouch(PlayerInteractEvent $event) {
         $player = $event->getPlayer();
         $block = $event->getBlock();
         $name = $player->getName();
-        if(isset($this->tap[$name])){
+
+        if(isset($this->tap[$name])) {
+            $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
             switch ($this->tap[$name]["type"]) {
                 case 'add':
                     if(!($block->getId() == 63 or $block->getId() == 68)){
@@ -165,15 +180,15 @@ class ReplenishResources extends PluginBase implements Listener{
                         return;
                     }
                     $event->setCancelled();
-                    $ids = explode(":",$this->tap[$name]["id"]);
-                    if(!isset($ids[1]))$ids[1] = 0;
-                    $this->config->set($block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName(),[
-                        "startx" => min($this->pos1[$name]["x"],$this->pos2[$name]["x"]),
-                        "starty" => min($this->pos1[$name]["y"],$this->pos2[$name]["y"]),
-                        "startz" => min($this->pos1[$name]["z"],$this->pos2[$name]["z"]),
-                        "endx" => max($this->pos1[$name]["x"],$this->pos2[$name]["x"]),
-                        "endy" => max($this->pos1[$name]["y"],$this->pos2[$name]["y"]),
-                        "endz" => max($this->pos1[$name]["z"],$this->pos2[$name]["z"]),
+                    $ids = explode(":", $this->tap[$name]["id"]);
+                    if(!isset($ids[1])) $ids[1] = 0;
+                    $this->config->set($place, [
+                        "startx" => min($this->pos1[$name]["x"], $this->pos2[$name]["x"]),
+                        "starty" => min($this->pos1[$name]["y"], $this->pos2[$name]["y"]),
+                        "startz" => min($this->pos1[$name]["z"], $this->pos2[$name]["z"]),
+                        "endx" => max($this->pos1[$name]["x"], $this->pos2[$name]["x"]),
+                        "endy" => max($this->pos1[$name]["y"], $this->pos2[$name]["y"]),
+                        "endz" => max($this->pos1[$name]["z"], $this->pos2[$name]["z"]),
                         "level" => $this->pos1[$name]["level"],
                         "id" => [
                             "id" => $ids[0],
@@ -188,7 +203,6 @@ class ReplenishResources extends PluginBase implements Listener{
                         $player->sendMessage("看板を触ってください");
                         return;
                     }
-                    $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
                     if($this->config->exists($place)){
                         $this->config->remove($place);
                         $this->config->save();
@@ -198,7 +212,6 @@ class ReplenishResources extends PluginBase implements Listener{
                     }
                     break;
                 case 'auto_add':
-                    $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
                     $resources = $this->getAutoReplenishResources();
                     if(in_array($place, $resources)) {
                         $player->sendMessage("すでに追加されています");
@@ -209,7 +222,6 @@ class ReplenishResources extends PluginBase implements Listener{
                     }
                     break;
                 case 'auto_del':
-                    $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
                     $resources = $this->getAutoReplenishResources();
                     if(in_array($place, $resources)) {
                         $resources = array_diff($resources, [$place]);
@@ -224,40 +236,41 @@ class ReplenishResources extends PluginBase implements Listener{
             unset($this->tap[$name]);
             return;
         }
-        if(($block->getId() == 63 or $block->getId() == 68)){
+
+        if($block->getId() == 63 or $block->getId() == 68) {
             $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
-            if($this->config->exists($place)){
-                if($this->setting->get("sneak") and !$player->isSneaking()){
-                    $player->sendMessage("スニークしながらタップすると補充します");
-                    return;
-                }
-                if((float)$this->setting->get("wait") > 0){
-                    $time = $this->checkTime($player->getName(), $place);
-                    if($time !== true){
-                        $player->sendMessage((float)$this->setting->get("wait")."秒以内に使用しています\nあと".round($time)."秒お待ちください");
-                        return;
-                    }
-                }
-                $datas = $this->config->get($place);
-                $check = (int)$this->setting->get("count");
-                $count = $this->countBlocks($datas);
-                if($check >= 0 and $count > $check){
-                    $player->sendMessage("まだブロックが残っています");
-                    return;
-                }
-                if($this->setting->get("announcement"))$this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
-                $this->setBlocks($datas);
+            if(!$this->config->exists($place)) return;
+
+            if($this->setting->get("sneak") and !$player->isSneaking()) {
+                $player->sendMessage("スニークしながらタップすると補充します");
+                return;
             }
+            if((float)$this->setting->get("wait") > 0) {
+                $time = $this->checkTime($player->getName(), $place);
+                if($time !== true) {
+                    $player->sendMessage($this->setting->get("wait")."秒以内に使用しています\nあと".round($time)."秒お待ちください");
+                    return;
+                }
+            }
+            $datas = $this->config->get($place);
+            $check = (int)$this->setting->get("count");
+            $count = $this->countBlocks($datas);
+            if($check >= 0 and $count > $check){
+                $player->sendMessage("まだブロックが残っています");
+                return;
+            }
+            if($this->setting->get("announcement")) $this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
+            $this->setBlocks($datas);
         }
     }
 
-    public function checkTime($name, $type){
-        if(!isset($this->time[$name][$type])){
+    public function checkTime($name, $type) {
+        if(!isset($this->time[$name][$type])) {
             $this->time[$name][$type] = microtime(true);
             return true;
         }
         $time = microtime(true) -$this->time[$name][$type];
-        if($time <= (float)$this->setting->get("wait")){
+        if($time <= (float)$this->setting->get("wait")) {
             return (float)$this->setting->get("wait") - $time;
         }
         $this->time[$name][$type] = microtime(true);
@@ -277,9 +290,7 @@ class ReplenishResources extends PluginBase implements Listener{
             for ($y = $sy; $y <= $ey; $y++) {
                 for ($z = $sz; $z <= $ez; $z++) {
                     $block = $level->getBlock(new Vector3($x,$y,$z));
-                    if($block->getId() !== 0){
-                        $count ++;
-                    }
+                    if($block->getId() !== 0) $count ++;
                 }
             }
         }
@@ -299,7 +310,8 @@ class ReplenishResources extends PluginBase implements Listener{
         for ($x = $sx; $x <= $ex; $x++) {
             for ($y = $sy; $y <= $ey; $y++) {
                 for ($z = $sz; $z <= $ez; $z++) {
-                    $level->setBlock(new Vector3($x,$y,$z),Block::get($id,$meta));
+                    $level->setBlockIdAt($x,$y,$z, $id);
+                    $level->setBlockDataAt($x,$y,$z, $meta);
                 }
             }
         }
@@ -341,11 +353,7 @@ class ReplenishResources extends PluginBase implements Listener{
                 ["text" => $count]
             ]
         ];
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
-        $pk = new ModalFormRequestPacket();
-        $pk->formId = $this->formIds["settings"];
-        $pk->formData = $json;
-        $player->dataPacket($pk);
+        $this->sendForm($player, $data, $this->formIds["settings"]);
     }
 
     public function sendWaitSettingForm($player, $mes = "") {
@@ -365,11 +373,7 @@ class ReplenishResources extends PluginBase implements Listener{
                 ]
             ]
         ];
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
-        $pk = new ModalFormRequestPacket();
-        $pk->formId = $this->formIds["wait"];
-        $pk->formData = $json;
-        $player->dataPacket($pk);
+        $this->sendForm($player, $data, $this->formIds["wait"]);
     }
 
     public function sendCountSettingForm($player, $mes = "") {
@@ -385,11 +389,7 @@ class ReplenishResources extends PluginBase implements Listener{
                 ]
             ]
         ];
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
-        $pk = new ModalFormRequestPacket();
-        $pk->formId = $this->formIds["count"];
-        $pk->formData = $json;
-        $player->dataPacket($pk);
+        $this->sendForm($player, $data, $this->formIds["count"]);
     }
 
     public function Receive(DataPacketReceiveEvent $event){
@@ -475,5 +475,13 @@ class ReplenishResources extends PluginBase implements Listener{
                 $this->sendSettingForm($player);
             }
         }
+    }
+
+    public function sendForm($player, $form, $id) {
+        $json = json_encode($form, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
+        $pk = new ModalFormRequestPacket();
+        $pk->formId = $id;
+        $pk->formData = $json;
+        $player->dataPacket($pk);
     }
 }
