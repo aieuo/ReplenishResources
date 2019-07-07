@@ -1,11 +1,11 @@
 name: ReplenishResources
 main: aieuo\ReplenishResources
-version: 2.3.0
+version: 2.4.0
 api: 3.0.0
 load: POSTWORLD
 author: aieuo
 commands:
  reso:
   description: 人工資源補充
-  usage: /reso <pos1 | pos2 | add | del | auto | setting>
+  usage: /reso <pos1 | pos2 | add | del | change | auto | setting>
   permission: op

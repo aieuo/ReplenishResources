@@ -3,21 +3,21 @@
 namespace aieuo;
 
 use pocketmine\scheduler\Task;
+use pocketmine\level\Position;
 
 class AutoReplenishTask extends Task {
-    public function __construct(ReplenishResources $owner) {
-        $this->owner = $owner;
+    public function __construct(ReplenishResourcesAPI $api) {
+        $this->api = $api;
     }
 
     public function onRun(int $currentTick) {
-        $owner = $this->owner;
-        foreach ($owner->getAutoReplenishResources() as $place) {
-            if(!$owner->config->exists($place)) continue;
-
-            if($owner->setting->get("announcement")) {
-                $owner->getServer()->broadcastMessage("資源(".$place.")の補充を行います");
+        $api = $this->api;
+        foreach ($api->getAutoReplenishResources() as $place) {
+            if($api->setting->get("announcement")) {
+                $api->getOwner()->getServer()->broadcastMessage("資源(".$place.")の補充を行います");
             }
-            $owner->setBlocks($owner->config->get($place));
+            $pos = explode(",", $place);
+            $api->replenish(new Position((int)$pos[0], (int)$pos[1], (int)$pos[2], $api->getOwner()->getServer()->getLevelByName($pos[3])));
         }
     }
 }
