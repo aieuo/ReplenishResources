@@ -15,8 +15,11 @@ use pocketmine\network\mcpe\protocol\ModalFormResponsePacket;
 use pocketmine\math\Vector3;
 use pocketmine\plugin\PluginBase;
 use pocketmine\utils\Config;
+use pocketmine\scheduler\TaskHandler;
 
 class ReplenishResources extends PluginBase implements Listener {
+
+    private $taskHandler = null;
 
     public function onEnable(){
         $this->getServer()->getPluginManager()->registerEvents($this,$this);
@@ -42,8 +45,10 @@ class ReplenishResources extends PluginBase implements Listener {
 
         $this->api = new ReplenishResourcesAPI($this, $this->config, $this->setting);
 
-        if($this->setting->get("enable-auto-replenish"))
-            $this->getScheduler()->scheduleRepeatingTask(new AutoReplenishTask($this->api), (float)$this->setting->get("auto-replenish-time", 60) * 20);
+        if($this->setting->get("enable-auto-replenish")) {
+            $time = (float)$this->setting->get("auto-replenish-time", 60) * 20;
+            $this->startAutoReplenishTask($time);
+        }
 
         $this->formIds = [
             "settings" => mt_rand(0, 99999999),
@@ -59,8 +64,8 @@ class ReplenishResources extends PluginBase implements Listener {
     }
 
     public function checkConfig() {
+        if(version_compare("4.2.0", $this->setting->get("version", ""), "<=")) return;
         $version = $this->getDescription()->getVersion();
-        if($version === $this->setting->get("version")) return;
         $this->setting->set("version", $version);
         $resources = [];
         foreach($this->config->getAll() as $place => $resource) {
@@ -75,6 +80,22 @@ class ReplenishResources extends PluginBase implements Listener {
         }
         $this->config->setAll($resources);
         $this->config->save();
+    }
+
+    public function startAutoReplenishTask($time) {
+        if($time === 0) {
+            if($this->taskHandler instanceof TaskHandler and !$this->taskHandler->isCancelled())
+                $this->getScheduler()->cancelTask($this->taskHandler->getTaskId());
+            $this->taskHandler = null;
+            return;
+        }
+        if($this->taskHandler instanceof TaskHandler and !$this->taskHandler->isCancelled()) {
+            if($time === $this->taskHandler->getPeriod()) return;
+            $this->getScheduler()->cancelTask($this->taskHandler->getTaskId());
+        }
+        $task = new AutoReplenishTask($this->api);
+        $handler = $this->getScheduler()->scheduleRepeatingTask($task, $time);
+        $this->taskHandler = $handler;
     }
 
     public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool {
@@ -528,7 +549,8 @@ class ReplenishResources extends PluginBase implements Listener {
                             return;
                         } else {
                             $this->setting->set("enable-auto-replenish", false);
-                            $player->sendMessage("自動補充をしないようにしました(再起動後に反映されます)");
+                            $this->startAutoReplenishTask(0);
+                            $player->sendMessage("自動補充をしないようにしました");
                         }
                         break;
                     case 7:
@@ -597,13 +619,14 @@ class ReplenishResources extends PluginBase implements Listener {
                     $this->sendWaitSettingForm($player, "§c必要事項を記入してください§f");
                     return;
                 }
-                if((int)$data[0] < 1) {
+                if((float)$data[0] < 1) {
                     $this->sendWaitSettingForm($player, "§c1より大きい数を入力してください§f", $data[0]);
                     return;
                 }
                 $this->setting->set("enable-auto-replenish", true);
-                $this->setting->set("auto-replenish-time", (int)$data[0]);
-                $player->sendMessage("自動補充の間隔を".(int)$data[0]."秒に設定しました(再起動後に反映されます)");
+                $this->setting->set("auto-replenish-time", (float)$data[0]);
+                $this->startAutoReplenishTask((float)$data[0] * 20);
+                $player->sendMessage("自動補充の間隔を".(float)$data[0]."秒に設定しました");
                 $this->sendSettingForm($player);
             }
         }
