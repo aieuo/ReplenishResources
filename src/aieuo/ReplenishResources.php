@@ -68,7 +68,7 @@ class ReplenishResources extends PluginBase implements Listener {
                 $resource["id"] = [[
                     "id" => $resource["id"]["id"],
                     "damage" => $resource["id"]["damage"],
-                    "per" => "100",
+                    "per" => 1,
                 ]];
             }
             $resources[$place] = $resource;
@@ -214,7 +214,7 @@ class ReplenishResources extends PluginBase implements Listener {
                         $ids = array_map(function($id2) {
                             $ids2 = explode(":", $id2);
                             if(!isset($ids2[1])) $ids2[1] = 0;
-                            if(!isset($ids2[2])) $ids2[2] = 100;
+                            if(!isset($ids2[2])) $ids2[2] = 1;
                             return ["id" => $ids2[0], "damage" => $ids2[1], "per" => $ids2[2]];
                         }, explode(",", $this->tap[$name]["id"]));
                         $this->api->updateResource($block, "id", $ids);
