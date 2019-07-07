@@ -64,7 +64,7 @@ class ReplenishResources extends PluginBase implements Listener {
     }
 
     public function checkConfig() {
-        if(version_compare("4.2.0", $this->setting->get("version", ""), "<=")) return;
+        if(version_compare("2.4.0", $this->setting->get("version", ""), "<=")) return;
         $version = $this->getDescription()->getVersion();
         $this->setting->set("version", $version);
         $resources = [];
