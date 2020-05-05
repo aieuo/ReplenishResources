@@ -218,7 +218,7 @@ class ReplenishResources extends PluginBase implements Listener {
                     return;
                 }
                 $player->sendMessage("補充看板を壊しました");
-                $this->api->removeResource($place);
+                $this->api->removeResource($block);
             }
         }
     }
