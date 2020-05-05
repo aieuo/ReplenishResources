@@ -1,17 +1,18 @@
 <?php
 namespace aieuo;
 
+use aieuo\formAPI\CustomForm;
+use aieuo\formAPI\element\Button;
+use aieuo\formAPI\element\Input;
+use aieuo\formAPI\element\Toggle;
+use aieuo\formAPI\ListForm;
+use pocketmine\level\Position;
 use pocketmine\Player;
-use pocketmine\block\Block;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
-use pocketmine\command\ConsoleCommandSender;
 use pocketmine\event\Listener;
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\player\PlayerInteractEvent;
-use pocketmine\event\server\DataPacketReceiveEvent;
-use pocketmine\network\mcpe\protocol\ModalFormRequestPacket;
-use pocketmine\network\mcpe\protocol\ModalFormResponsePacket;
 use pocketmine\math\Vector3;
 use pocketmine\plugin\PluginBase;
 use pocketmine\utils\Config;
@@ -49,14 +50,6 @@ class ReplenishResources extends PluginBase implements Listener {
             $time = (float)$this->setting->get("auto-replenish-time", 60) * 20;
             $this->startAutoReplenishTask($time);
         }
-
-        $this->formIds = [
-            "settings" => mt_rand(0, 99999999),
-            "wait" => mt_rand(0, 99999999),
-            "count" => mt_rand(0, 99999999),
-            "place" => mt_rand(0, 99999999),
-            "autoreplenish" => mt_rand(0, 99999999),
-        ];
     }
 
     public function onDisable() {
@@ -350,7 +343,7 @@ class ReplenishResources extends PluginBase implements Listener {
         return $count;
     }
 
-    public function sendSettingForm($player) {
+    public function sendSettingForm(Player $player, array $messages = []) {
         if(!$this->setting->get("sneak")) {
             $sneak = "[スニーク] 今は§cOFF§r (スニークしなくても反応します)";
         } else {
@@ -377,140 +370,41 @@ class ReplenishResources extends PluginBase implements Listener {
             $inside = "[資源内のプレイヤー確認] 今は§bON§r (資源内にプレイヤーがいると補充しません)";
         }
         if(!$this->setting->get("enable-auto-replenish")) {
-            $autoreplenish = "[自動補充] 今は§cOFF§r (設定した資源を定期的に補充しません)";
+            $autoReplenish = "[自動補充] 今は§cOFF§r (設定した資源を定期的に補充しません)";
         } else {
-            $autoreplenish = "[自動補充] 今は§bON§r (設定した資源を".$this->setting->get("auto-replenish-time")."に1回補充します)";
+            $autoReplenish = "[自動補充] 今は§bON§r (設定した資源を".$this->setting->get("auto-replenish-time")."に1回補充します)";
         }
         $place = "[補充] ".$this->setting->get("tick-place", 100)."ブロック置いて".$this->setting->get("period")."tick待つ";
-        $data = [
-            "type" => "form",
-            "title" => "設定",
-            "content" => "§7ボタンを押してください",
-            "buttons" => [
-                ["text" => $sneak],
-                ["text" => $announcement],
-                ["text" => $wait],
-                ["text" => $count],
-                ["text" => $inside],
-                ["text" => $place],
-                ["text" => $autoreplenish],
-                ["text" => "終了"],
-            ]
-        ];
-        $this->sendForm($player, $data, $this->formIds["settings"]);
-    }
 
-    public function sendWaitSettingForm($player, $mes = "", $default = null) {
-        $data = [
-            "type" => "custom_form",
-            "title" => "設定 > 連続補充の制限",
-            "content" => [
-                [
-                    "type" => "input",
-                    "text" => "制限する秒数を入力してください".($mes === "" ? "" : "\n".$mes),
-                    "default" => $default ?? (string)$this->setting->get("wait"),
-                    "placeholder" => "1秒より長く設定してください"
-                ],
-                [
-                    "type" => "toggle",
-                    "text" => "初期値に戻す (60秒)"
-                ],
-            ]
-        ];
-        $this->sendForm($player, $data, $this->formIds["wait"]);
-    }
-
-    public function sendCountSettingForm($player, $mes = "", $default = null) {
-        $data = [
-            "type" => "custom_form",
-            "title" => "設定 > 残さずに掘る",
-            "content" => [
-                [
-                    "type" => "input",
-                    "text" => "残っていてもいいブロックの数を入力してください".($mes === "" ? "" : "\n".$mes),
-                    "default" => $default ?? (string)$this->setting->get("count"),
-                    "placeholder" => "0個以上で設定してください"
-                ],
-                [
-                    "type" => "toggle",
-                    "text" => "初期値に戻す (0個)"
-                ],
-            ]
-        ];
-        $this->sendForm($player, $data, $this->formIds["count"]);
-    }
-
-    public function sendPlaceSettingForm($player, $mes1 = "", $mes2 = "", $default1 = null, $default2 = null) {
-        $data = [
-            "type" => "custom_form",
-            "title" => "設定 > 補充",
-            "content" => [
-                [
-                    "type" => "input",
-                    "text" => "一度に置くブロックの数".($mes1 === "" ? "" : "\n".$mes1),
-                    "default" => $default1 ?? (string)$this->setting->get("tick-place"),
-                    "placeholder" => "1以上で設定してください"
-                ],
-                [
-                    "type" => "input",
-                    "text" => "ブロックを置いてから待機するtick数".($mes2 === "" ? "" : "\n".$mes2),
-                    "default" => $default2 ?? (string)$this->setting->get("period"),
-                    "placeholder" => "1以上で設定してください"
-                ],
-                [
-                    "type" => "toggle",
-                    "text" => "初期値に戻す (100個, 1tick)"
-                ],
-            ]
-        ];
-        $this->sendForm($player, $data, $this->formIds["place"]);
-    }
-
-    public function sendAutoReplenishSettingForm($player, $mes = "", $default = null) {
-        $data = [
-            "type" => "custom_form",
-            "title" => "設定 > 自動補充",
-            "content" => [
-                [
-                    "type" => "input",
-                    "text" => "補充する間隔を秒で入力してください\n設定は再起動後反映されます".($mes === "" ? "" : "\n".$mes),
-                    "default" => $default ?? (string)$this->setting->get("auto-replenish-time"),
-                    "placeholder" => "1秒以上で設定してください"
-                ],
-                [
-                    "type" => "toggle",
-                    "text" => "初期値に戻す (3600秒)"
-                ],
-            ]
-        ];
-        $this->sendForm($player, $data, $this->formIds["autoreplenish"]);
-    }
-
-    public function Receive(DataPacketReceiveEvent $event){
-        $pk = $event->getPacket();
-        $player = $event->getPlayer();
-        $name = $player->getName();
-        if($pk instanceof ModalFormResponsePacket){
-            if($pk->formId === $this->formIds["settings"]) {
-                $data = json_decode($pk->formData);
-                if($data === null) return;
+        (new ListForm("設定"))
+            ->setContent("§7ボタンを押してください")
+            ->setButtons([
+                new Button($sneak),
+                new Button($announcement),
+                new Button($wait),
+                new Button($count),
+                new Button($inside),
+                new Button($place),
+                new Button($autoReplenish),
+                new Button("終了"),
+            ])->onReceive(function (Player $player, int $data) {
                 switch($data) {
                     case 0:
                         if(!$this->setting->get("sneak")) {
                             $this->setting->set("sneak", true);
-                            $player->sendMessage("スニークをオンにしました");
+                            $message = "スニークをオンにしました";
                         } else {
                             $this->setting->set("sneak", false);
-                            $player->sendMessage("スニークをオフにしました");
+                            $message = "スニークをオフにしました";
                         }
                         break;
                     case 1:
                         if(!$this->setting->get("announcement")) {
                             $this->setting->set("announcement", true);
-                            $player->sendMessage("アナウンスをオンにしました");
+                            $message = "アナウンスをオンにしました";
                         } else {
                             $this->setting->set("announcement", false);
-                            $player->sendMessage("アナウンスをオフにしました");
+                            $message = "アナウンスをオフにしました";
                         }
                         break;
                     case 2:
@@ -519,7 +413,7 @@ class ReplenishResources extends PluginBase implements Listener {
                             return;
                         } else {
                             $this->setting->set("enable-wait", false);
-                            $player->sendMessage("連続補充の制限をオフにしました");
+                            $message = "連続補充の制限をオフにしました";
                         }
                         break;
                     case 3:
@@ -528,16 +422,16 @@ class ReplenishResources extends PluginBase implements Listener {
                             return;
                         } else {
                             $this->setting->set("enable-count", false);
-                            $player->sendMessage("ブロックが残っていても補充するようにしました");
+                            $message = "ブロックが残っていても補充するようにしました";
                         }
                         break;
                     case 4:
                         if(!$this->setting->get("check-inside")) {
                             $this->setting->set("check-inside", true);
-                            $player->sendMessage("資源内にプレイヤーがいると補充できないようにしました");
+                            $message = "資源内にプレイヤーがいると補充できないようにしました";
                         } else {
                             $this->setting->set("check-inside", false);
-                            $player->sendMessage("資源内にプレイヤーがいても補充できるようにしました");
+                            $message = "資源内にプレイヤーがいても補充できるようにしました";
                         }
                         break;
                     case 5:
@@ -550,93 +444,112 @@ class ReplenishResources extends PluginBase implements Listener {
                         } else {
                             $this->setting->set("enable-auto-replenish", false);
                             $this->startAutoReplenishTask(0);
-                            $player->sendMessage("自動補充をしないようにしました");
+                            $message = "自動補充をしないようにしました";
                         }
                         break;
-                    case 7:
+                    default:
                         return;
                 }
-                $this->sendSettingForm($player);
-            } elseif($pk->formId === $this->formIds["wait"]) {
-                $data = json_decode($pk->formData);
-                if($data === null) return;
+                $player->sendMessage($message);
+                $this->sendSettingForm($player, [$message]);
+            })->addMessages($messages)->show($player);
+    }
+
+    public function sendWaitSettingForm(Player $player, array $default = [], array $errors = []) {
+        (new CustomForm("設定 > 連続補充の制限"))
+            ->setContents([
+                new Input("制限する秒数を入力してください", "1秒より長く設定してください", $default[0] ?? (string)$this->setting->get("wait")),
+                new Toggle("初期値に戻す (60秒)", $default[1] ?? false),
+            ])->onReceive(function (Player $player, array $data) {
                 if($data[1]) $data[0] = 60;
                 if($data[0] === "") {
-                    $this->sendWaitSettingForm($player, "§c必要事項を記入してください§f");
+                    $this->sendWaitSettingForm($player, $data, [["§c必要事項を記入してください§f", 0]]);
                     return;
                 }
                 if((float)$data[0] < 1) {
-                    $this->sendWaitSettingForm($player, "§c1より大きい数を入力してください§f", $data[0]);
+                    $this->sendWaitSettingForm($player, $data, [["§c1より大きい数を入力してください§f", 0]]);
                     return;
                 }
                 $this->setting->set("enable-wait", true);
                 $this->setting->set("wait", (float)$data[0]);
                 $player->sendMessage("連続補充の制限を".floatval($data[0])."秒に設定しました");
-                $this->sendSettingForm($player);
-            } elseif($pk->formId === $this->formIds["count"]) {
-                $data = json_decode($pk->formData);
-                if($data === null) return;
+                $this->sendSettingForm($player, ["連続補充の制限を".floatval($data[0])."秒に設定しました"]);
+            })->addErrors($errors)->show($player);
+    }
+
+    public function sendCountSettingForm(Player $player, array $default = [], array $errors = []) {
+        (new CustomForm("設定 > 残さずに掘る"))
+            ->setContents([
+                new Input("残っていてもいいブロックの数を入力してください", "0個以上で設定してください", $default[0] ?? (string)$this->setting->get("count")),
+                new Toggle("初期値に戻す (0個)", $default[1] ?? false),
+            ])->onReceive(function (Player $player, array $data) {
                 if($data[1]) $data[0] = 0;
                 if($data[0] === "") {
-                    $this->sendWaitSettingForm($player, "§c必要事項を記入してください§f");
+                    $this->sendCountSettingForm($player, $data, [["§c必要事項を記入してください§f", 0]]);
                     return;
                 }
                 if((int)$data[0] < 0) {
-                    $this->sendWaitSettingForm($player, "§c0以上で入力してください§f", $data[0]);
+                    $this->sendCountSettingForm($player, $data, [["§c0以上で入力してください§f", 0]]);
                     return;
                 }
                 $this->setting->set("enable-count", true);
                 $this->setting->set("count", (int)$data[0]);
                 $player->sendMessage("残っているブロックの数が".(int)$data[0]."個以下の時だけ補充するようにしました");
-                $this->sendSettingForm($player);
-            } elseif($pk->formId === $this->formIds["place"]) {
-                $data = json_decode($pk->formData);
-                if($data === null) return;
+                $this->sendSettingForm($player, ["残っているブロックの数が".(int)$data[0]."個以下の時だけ補充するようにしました"]);
+            })->addErrors($errors)->show($player);
+    }
+
+    public function sendPlaceSettingForm(Player $player, array $default = [], array $errors = []) {
+        (new CustomForm("設定 > 補充"))
+            ->setContents([
+                new Input("一度に置くブロックの数", "1以上で設定してください", $default[0] ?? (string)$this->setting->get("tick-place")),
+                new Input("ブロックを置いてから待機するtick数", "1以上で設定してください", $default[1] ?? (string)$this->setting->get("period")),
+                new Toggle("初期値に戻す (100個, 1tick)"),
+            ])->onReceive(function (Player $player, array $data) {
                 if($data[2]) {
                     $data[0] = 100;
                     $data[1] = 1;
                 }
-                $errors = ["", ""];
-                if((int)$data[0] < 1) $error[0] = "§c1以上で入力してください§f";
-                if((int)$data[1] < 1) $error[1] = "§c1以上で入力してください§f";
-                if($data[0] === "") $error[0] = "§c必要事項を記入してください§f";
-                if($data[1] === "") $error[1] = "§c必要事項を記入してください§f";
-                if($errors[0] !== "" or $errors[1] !== "") {
-                    $this->sendWaitSettingForm($player, $error[0], $error[1],
-                        $error[0] == "§c必要事項を記入してください§f" ? null : $data[0], $error[1] == "§c必要事項を記入してください§f" ? null : $data[1]);
+
+                $errors = [];
+                if($data[0] === "") $errors[] = ["§c必要事項を記入してください§f", 0];
+                if((int)$data[0] < 1) $errors[] = ["§c1以上で入力してください§f", 0];
+                if($data[1] === "") $errors[] = ["§c必要事項を記入してください§f", 1];
+                if((int)$data[1] < 1) $errors[] = ["§c1以上で入力してください§f", 1];
+                if(!empty($errors)) {
+                    $this->sendPlaceSettingForm($player, $data, $errors);
                     return;
                 }
+
                 $this->setting->set("tick-place", (int)$data[0]);
                 $this->setting->set("period", (int)$data[1]);
                 $player->sendMessage("一度に置くブロックに数を".(int)$data[0]."個にしました");
                 $player->sendMessage("ブロックを置いてから待機する".(int)$data[1]."数を1にしました");
-                $this->sendSettingForm($player);
-            } elseif($pk->formId === $this->formIds["autoreplenish"]) {
-                $data = json_decode($pk->formData);
-                if($data === null) return;
+                $this->sendSettingForm($player, ["一度に置くブロックに数を".(int)$data[0]."個にしました", "ブロックを置いてから待機する".(int)$data[1]."数を1にしました"]);
+            })->addErrors($errors)->show($player);
+    }
+
+    public function sendAutoReplenishSettingForm(Player $player, array $default = [], array $errors = []) {
+        (new CustomForm("設定 > 自動補充"))
+            ->setContents([
+                new Input("補充する間隔を秒で入力してください", "1秒以上で設定してください", $default[0] ?? (string)$this->setting->get("auto-replenish-time")),
+                new Toggle("初期値に戻す (3600秒)"),
+            ])->onReceive(function (Player $player, array $data) {
                 if($data[1]) $data[0] = 3600;
                 if($data[0] === "") {
-                    $this->sendWaitSettingForm($player, "§c必要事項を記入してください§f");
+                    $this->sendWaitSettingForm($player, $data, [["§c必要事項を記入してください§f", 0]]);
                     return;
                 }
                 if((float)$data[0] < 1) {
-                    $this->sendWaitSettingForm($player, "§c1より大きい数を入力してください§f", $data[0]);
+                    $this->sendWaitSettingForm($player, $data, [["§c1より大きい数を入力してください§f", 0]]);
                     return;
                 }
+
                 $this->setting->set("enable-auto-replenish", true);
                 $this->setting->set("auto-replenish-time", (float)$data[0]);
                 $this->startAutoReplenishTask((float)$data[0] * 20);
                 $player->sendMessage("自動補充の間隔を".(float)$data[0]."秒に設定しました");
-                $this->sendSettingForm($player);
-            }
-        }
-    }
-
-    public function sendForm($player, $form, $id) {
-        $json = json_encode($form, JSON_PRETTY_PRINT | JSON_BIGINT_AS_STRING | JSON_UNESCAPED_UNICODE);
-        $pk = new ModalFormRequestPacket();
-        $pk->formId = $id;
-        $pk->formData = $json;
-        $player->dataPacket($pk);
+                $this->sendSettingForm($player, ["自動補充の間隔を".(float)$data[0]."秒に設定しました"]);
+            })->addErrors($errors)->show($player);
     }
 }
