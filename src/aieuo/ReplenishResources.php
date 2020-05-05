@@ -20,12 +20,32 @@ use pocketmine\scheduler\TaskHandler;
 
 class ReplenishResources extends PluginBase implements Listener {
 
+    /** @var TaskHandler|null  */
     private $taskHandler = null;
+
+    /* @var Config */
+    private $setting;
+
+    /* @var ReplenishResourcesAPI */
+    private $api;
+
+    /** @var string[] */
+    private $break;
+
+    /** @var Position[] */
+    private $pos1;
+    /** @var Position[] */
+    private $pos2;
+
+    /** @var array */
+    private $tap;
+
+    /** @var float[][] */
+    private $time;
 
     public function onEnable(){
         $this->getServer()->getPluginManager()->registerEvents($this,$this);
         if(!file_exists($this->getDataFolder())) @mkdir($this->getDataFolder(), 0721, true);
-        $this->config = new Config($this->getDataFolder()."config.yml", Config::YAML);
         $this->setting = new Config($this->getDataFolder()."setting.yml", Config::YAML, [
             "enable-wait" => true,
             "wait" => 60,
@@ -44,7 +64,7 @@ class ReplenishResources extends PluginBase implements Listener {
 
         $this->checkConfig();
 
-        $this->api = new ReplenishResourcesAPI($this, $this->config, $this->setting);
+        $this->api = new ReplenishResourcesAPI($this, $this->getConfig(), $this->setting);
 
         if($this->setting->get("enable-auto-replenish")) {
             $time = (float)$this->setting->get("auto-replenish-time", 60) * 20;
@@ -61,7 +81,7 @@ class ReplenishResources extends PluginBase implements Listener {
         $version = $this->getDescription()->getVersion();
         $this->setting->set("version", $version);
         $resources = [];
-        foreach($this->config->getAll() as $place => $resource) {
+        foreach($this->getConfig()->getAll() as $place => $resource) {
             if(isset($resource["id"]["id"]) or isset($resource["id"]["damage"])) {
                 $resource["id"] = [[
                     "id" => $resource["id"]["id"],
@@ -71,34 +91,36 @@ class ReplenishResources extends PluginBase implements Listener {
             }
             $resources[$place] = $resource;
         }
-        $this->config->setAll($resources);
-        $this->config->save();
+        $this->getConfig()->setAll($resources);
+        $this->getConfig()->save();
     }
 
-    public function startAutoReplenishTask($time) {
+    public function startAutoReplenishTask(int $time) {
         if($time === 0) {
-            if($this->taskHandler instanceof TaskHandler and !$this->taskHandler->isCancelled())
+            if($this->taskHandler instanceof TaskHandler and !$this->taskHandler->isCancelled()) {
                 $this->getScheduler()->cancelTask($this->taskHandler->getTaskId());
+            }
             $this->taskHandler = null;
             return;
         }
+
         if($this->taskHandler instanceof TaskHandler and !$this->taskHandler->isCancelled()) {
             if($time === $this->taskHandler->getPeriod()) return;
             $this->getScheduler()->cancelTask($this->taskHandler->getTaskId());
         }
-        $task = new AutoReplenishTask($this->api);
-        $handler = $this->getScheduler()->scheduleRepeatingTask($task, $time);
-        $this->taskHandler = $handler;
+
+        $this->taskHandler = $this->getScheduler()->scheduleRepeatingTask(new AutoReplenishTask(), $time);
     }
 
     public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool {
-        if(!$sender->isOp()) return false;
-        if(!($sender instanceof Player)){
+        if(!$command->testPermission($sender)) return false;
+
+        if(!($sender instanceof Player)) {
             $sender->sendMessage("コンソールからは使用できません");
             return true;
         }
         if(!isset($args[0])) {
-            $sender->sendMessage("/reso <pos1 | pos2 | add | del | change | cancel | auto | setting>");
+            $sender->sendMessage("Usage: /reso <pos1 | pos2 | add | del | change | cancel | auto | setting>");
             return true;
         }
 
@@ -111,7 +133,7 @@ class ReplenishResources extends PluginBase implements Listener {
                 break;
             case 'add':
                 if(!isset($args[1])) {
-                    $sender->sendMessage("/reso add <id>");
+                    $sender->sendMessage("Usage: /reso add <id>");
                     return true;
                 }
                 if(!isset($this->pos1[$name]) or !isset($this->pos2[$name])){
@@ -131,7 +153,7 @@ class ReplenishResources extends PluginBase implements Listener {
                 break;
             case "change":
                 if(!isset($args[1])) {
-                    $sender->sendMessage("/reso change <id>");
+                    $sender->sendMessage("Usage: /reso change <id>");
                     return true;
                 }
                 $this->tap[$name] = ["type" => "change", "id" => $args[1]];
@@ -143,7 +165,7 @@ class ReplenishResources extends PluginBase implements Listener {
                 break;
             case 'auto':
                 if(!isset($args[1])) {
-                    $sender->sendMessage("/reso auto <add | del>");
+                    $sender->sendMessage("Usage: /reso auto <add | del>");
                     return true;
                 }
                 switch ($args[1]) {
@@ -156,7 +178,7 @@ class ReplenishResources extends PluginBase implements Listener {
                         $sender->sendMessage("削除する看板をタップしてください");
                         break;
                     default:
-                        $sender->sendMessage("/reso auto <add | del>");
+                        $sender->sendMessage("Usage: /reso auto <add | del>");
                         break;
                 }
                 break;
@@ -164,13 +186,13 @@ class ReplenishResources extends PluginBase implements Listener {
                 $this->sendSettingForm($sender);
                 break;
             default:
-                $sender->sendMessage("/reso <pos1 | pos2 | add | del | change | cancel | auto | setting>");
+                $sender->sendMessage("Usage: /reso <pos1 | pos2 | add | del | change | cancel | auto | setting>");
                 break;
         }
         return true;
     }
 
-    public function onBreak(BlockBreakEvent $event){
+    public function onBreak(BlockBreakEvent $event) {
         $player = $event->getPlayer();
         $block = $event->getBlock();
         $name = $player->getName();
@@ -206,108 +228,110 @@ class ReplenishResources extends PluginBase implements Listener {
         $block = $event->getBlock();
         $name = $player->getName();
 
-        if($block->getId() == 63 or $block->getId() == 68) {
-            if(isset($this->tap[$name])) {
-                $event->setCancelled();
-                switch ($this->tap[$name]["type"]) {
-                    case 'add':
-                        $ids = array_map(function($id2) {
-                            $ids2 = explode(":", $id2);
-                            if(!isset($ids2[1])) $ids2[1] = 0;
-                            if(!isset($ids2[2])) $ids2[2] = 100;
-                            return ["id" => $ids2[0], "damage" => $ids2[1], "per" => $ids2[2]];
-                        }, explode(",", $this->tap[$name]["id"]));
-                        $this->api->addResource($block, $this->pos1[$name], $this->pos2[$name], $ids);
-                        $player->sendMessage("追加しました");
-                        break;
-                    case 'change':
-                        if(($resource = $this->api->getResource($block)) === null) {
-                            $player->sendMessage("その場所にはまだ追加されていません");
-                            return;
-                        }
-                        $ids = array_map(function($id2) {
-                            $ids2 = explode(":", $id2);
-                            if(!isset($ids2[1])) $ids2[1] = 0;
-                            if(!isset($ids2[2])) $ids2[2] = 1;
-                            return ["id" => $ids2[0], "damage" => $ids2[1], "per" => $ids2[2]];
-                        }, explode(",", $this->tap[$name]["id"]));
-                        $this->api->updateResource($block, "id", $ids);
-                        $player->sendMessage("変更しました");
-                        break;
-                    case 'del':
-                        if($this->api->removeResource($block)) {
-                            $player->sendMessage("削除しました");
-                        } else {
-                            $player->sendMessage("その場所には登録されていません");
-                        }
-                        break;
-                    case 'auto_add':
-                        if(!$this->api->existsResource($block)) {
-                            $player->sendMessage("それは補充看板ではありません");
-                            return true;
-                        }
-                        if(!$this->api->addAutoReplenishResource($block)) {
-                            $player->sendMessage("すでに追加されています");
-                            return true;
-                        }
-                        $player->sendMessage("追加しました");
-                        if(!$this->setting->get("enable-auto-replenish")) $player->sendMessage("§e自動補充がオフになっています。/reso settingでオンにしてください");
-                        break;
-                    case 'auto_del':
-                        if(!$this->api->removeAutoReplenishResource($block)) {
-                            $player->sendMessage("まだ追加されていません");
-                            return true;
-                        }
-                        $player->sendMessage("削除しました");
-                        break;
-                }
-                unset($this->tap[$name]);
-                return;
-            }
+        if($block->getId() !== 63 and $block->getId() !== 68) return;
 
-            if(!$this->api->existsResource($block)) return;
-
-            $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
-
-            if($this->setting->get("sneak", false) and !$player->isSneaking()) {
-                $player->sendMessage("スニークしながらタップすると補充します");
-                return;
-            }
-            if($this->setting->get("enable-wait", false) and (float)$this->setting->get("wait") > 0) {
-                $time = $this->checkTime($player->getName(), $place);
-                if($time !== true) {
-                    $player->sendMessage($this->setting->get("wait")."秒以内に使用しています\nあと".round($time, 1)."秒お待ちください");
-                    return;
-                }
-            }
-            $resource = $this->api->getResource($block);
-            if($this->setting->get("check-inside", false)) {
-                $players = $player->level->getPlayers();
-                $inside = false;
-                foreach($players as $p) {
-                    if($resource["level"] == $p->level->getFolderName()
-                        and $resource["startx"] <= floor($p->x) and floor($p->x) <= $resource["endx"]
-                        and $resource["starty"] <= floor($p->y) and floor($p->y) <= $resource["endy"]
-                        and $resource["startz"] <= floor($p->z) and floor($p->z) <= $resource["endz"]
-                    ) {
-                        $p->sendTip("§e".$name."があなたのいる資源を補充しようとしています");
-                        $inside = true;
+        if(isset($this->tap[$name])) {
+            $event->setCancelled();
+            switch ($this->tap[$name]["type"]) {
+                case 'add':
+                    $ids = array_map(function($id2) {
+                        $ids2 = explode(":", $id2);
+                        if(!isset($ids2[1])) $ids2[1] = 0;
+                        if(!isset($ids2[2])) $ids2[2] = 100;
+                        return ["id" => $ids2[0], "damage" => $ids2[1], "per" => $ids2[2]];
+                    }, explode(",", $this->tap[$name]["id"]));
+                    $this->api->addResource($block, $this->pos1[$name], $this->pos2[$name], $ids);
+                    $player->sendMessage("追加しました");
+                    break;
+                case 'change':
+                    if(!$this->api->existsResource($block)) {
+                        $player->sendMessage("その場所にはまだ追加されていません");
+                        return;
                     }
-                }
-                if($inside) {
-                    $player->sendMessage("資源内にプレイヤーがいるため補充できません");
-                    return;
+                    $ids = array_map(function($id2) {
+                        $ids2 = explode(":", $id2);
+                        if(!isset($ids2[1])) $ids2[1] = 0;
+                        if(!isset($ids2[2])) $ids2[2] = 1;
+                        return ["id" => $ids2[0], "damage" => $ids2[1], "per" => $ids2[2]];
+                    }, explode(",", $this->tap[$name]["id"]));
+                    $this->api->updateResource($block, "id", $ids);
+                    $player->sendMessage("変更しました");
+                    break;
+                case 'del':
+                    if($this->api->removeResource($block)) {
+                        $player->sendMessage("削除しました");
+                    } else {
+                        $player->sendMessage("その場所には登録されていません");
+                    }
+                    break;
+                case 'auto_add':
+                    if(!$this->api->existsResource($block)) {
+                        $player->sendMessage("それは補充看板ではありません");
+                        return;
+                    }
+                    if(!$this->api->addAutoReplenishResource($block)) {
+                        $player->sendMessage("すでに追加されています");
+                        return;
+                    }
+                    $player->sendMessage("追加しました");
+                    if(!$this->setting->get("enable-auto-replenish")) $player->sendMessage("§e自動補充がオフになっています。/reso settingでオンにしてください");
+                    break;
+                case 'auto_del':
+                    if(!$this->api->removeAutoReplenishResource($block)) {
+                        $player->sendMessage("まだ追加されていません");
+                        return;
+                    }
+                    $player->sendMessage("削除しました");
+                    break;
+            }
+            unset($this->tap[$name]);
+            return;
+        }
+
+        if(!$this->api->existsResource($block)) return;
+
+        $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
+
+        if($this->setting->get("sneak", false) and !$player->isSneaking()) {
+            $player->sendMessage("スニークしながらタップすると補充します");
+            return;
+        }
+        if($this->setting->get("enable-wait", false) and (float)$this->setting->get("wait") > 0) {
+            $time = $this->checkTime($player->getName(), $place);
+            if($time !== true) {
+                $player->sendMessage($this->setting->get("wait")."秒以内に使用しています\nあと".round($time, 1)."秒お待ちください");
+                return;
+            }
+        }
+        $resource = $this->api->getResource($block);
+        if($this->setting->get("check-inside", false)) {
+            $players = $player->level->getPlayers();
+            $inside = false;
+            foreach($players as $p) {
+                if($resource["level"] === $p->level->getFolderName()
+                    and $resource["startx"] <= floor($p->x) and floor($p->x) <= $resource["endx"]
+                    and $resource["starty"] <= floor($p->y) and floor($p->y) <= $resource["endy"]
+                    and $resource["startz"] <= floor($p->z) and floor($p->z) <= $resource["endz"]
+                ) {
+                    $p->sendTip("§e".$name."があなたのいる資源を補充しようとしています");
+                    $inside = true;
                 }
             }
-            $allow = (int)$this->setting->get("count");
+            if($inside) {
+                $player->sendMessage("資源内にプレイヤーがいるため補充できません");
+                return;
+            }
+        }
+        $allow = (int)$this->setting->get("count");
+        if($this->setting->get("enable-count", false) and $allow >= 0) {
             $count = $this->countBlocks($resource);
-            if($this->setting->get("enable-count", false) and $allow >= 0 and $count > $allow){
+            if ($count > $allow) {
                 $player->sendMessage("まだブロックが残っています (".($count - $allow).")");
                 return;
             }
-            if($this->setting->get("announcement")) $this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
-            $this->api->replenish($block);
         }
+        if($this->setting->get("announcement")) $this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
+        $this->api->replenish($block);
     }
 
     public function checkTime($name, $type) {
