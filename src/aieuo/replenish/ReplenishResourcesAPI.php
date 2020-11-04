@@ -1,5 +1,5 @@
 <?php
-namespace aieuo;
+namespace aieuo\replenish;
 
 use pocketmine\level\Position;
 use pocketmine\math\Vector3;
@@ -23,7 +23,7 @@ class ReplenishResourcesAPI {
         self::$instance = $this;
     }
 
-    public static function getInstance() {
+    public static function getInstance(): self {
         return self::$instance;
     }
 
@@ -39,8 +39,8 @@ class ReplenishResourcesAPI {
         return $this->setting;
     }
 
-    public function existsResource(Position $pos) {
-        if ($pos->level === null) return null;
+    public function existsResource(Position $pos): ?bool {
+        if ($pos->level === null) return false;
         return $this->resources->exists($pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName());
     }
 
@@ -86,7 +86,7 @@ class ReplenishResourcesAPI {
     public function addAutoReplenishResource(Position $pos): bool {
         $resources = $this->getAutoReplenishResources();
         $add = $pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName();
-        if(in_array($add, $resources)) return false;
+        if(in_array($add, $resources, true)) return false;
         $this->setting->set("auto-replenish-resources", array_merge($resources, [$add]));
         $this->setting->save();
         return true;
@@ -95,7 +95,7 @@ class ReplenishResourcesAPI {
     public function removeAutoReplenishResource(Position $pos): bool {
         $resources = $this->getAutoReplenishResources();
         $remove = $pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName();
-        if(!in_array($remove, $resources)) return false;
+        if(!in_array($remove, $resources, true)) return false;
         $resources = array_diff($resources, [$remove]);
         $resources = array_values($resources);
         $this->setting->set("auto-replenish-resources", $resources);
@@ -161,12 +161,13 @@ class ReplenishResourcesAPI {
             /** @var callable */
             private $callable;
             /** @var array  */
-            private $data = [];
+            private $data;
             public function __construct(callable $callable, array $data) {
                 $this->callable = $callable;
                 $this->data = $data;
             }
 
+            /** @noinspection ReturnTypeCanBeDeclaredInspection */
             public function onRun(int $currentTick) {
                 call_user_func_array($this->callable, $this->data);
             }
