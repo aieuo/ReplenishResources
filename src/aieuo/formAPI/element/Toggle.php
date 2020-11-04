@@ -8,7 +8,7 @@ class Toggle extends Element {
     protected $type = self::ELEMENT_TOGGLE;
 
     /** @var boolean */
-    private $default = false;
+    private $default;
 
     public function __construct(string $text, bool $default = false) {
         parent::__construct($text);
@@ -34,7 +34,7 @@ class Toggle extends Element {
     public function jsonSerialize(): array {
         return [
             "type" => $this->type,
-            "text" => str_replace("\\n", "\n", $this->reflectHighlight($this->text)),
+            "text" => $this->extraText.$this->reflectHighlight($this->text),
             "default" => $this->default,
         ];
     }

@@ -8,15 +8,15 @@ class Slider extends Element {
     protected $type = self::ELEMENT_SLIDER;
 
     /** @var float */
-    private $min = 0;
+    private $min;
     /** @var float */
-    private $max = 0;
+    private $max;
     /** @var float */
-    private $step  = 1;
+    private $step;
     /** @var float */
-    private $default = 0.0;
+    private $default;
 
-    public function __construct(string $text, float $min, float $max, float $step = 1.0, ?int $default = null) {
+    public function __construct(string $text, float $min, float $max, float $step = 1.0, float $default = null) {
         parent::__construct($text);
         $this->min = $min;
         $this->max = $max;
@@ -90,14 +90,14 @@ class Slider extends Element {
 
     public function jsonSerialize(): array {
         if ($this->min > $this->max) {
-            list($this->min, $this->max) = [$this->max, $this->min]; // 入れ替える
+            [$this->min, $this->max] = [$this->max, $this->min]; // 入れ替える
         }
         if ($this->default === null or $this->default < $this->min) {
             $this->default = $this->min;
         }
         return [
             "type" => $this->type,
-            "text" => str_replace("\\n", "\n", $this->reflectHighlight($this->text)),
+            "text" => $this->extraText.$this->reflectHighlight($this->text),
             "min" => $this->min,
             "max" => $this->max,
             "step" => $this->step,

@@ -10,7 +10,7 @@ class StepSlider extends Dropdown {
     public function jsonSerialize(): array {
         return [
             "type" => $this->type,
-            "text" => str_replace("\\n", "\n", $this->reflectHighlight($this->text)),
+            "text" => $this->extraText.$this->reflectHighlight($this->text),
             "steps" => $this->options,
             "default" => $this->default,
         ];

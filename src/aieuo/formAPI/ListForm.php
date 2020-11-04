@@ -3,6 +3,7 @@
 namespace aieuo\formAPI;
 
 use aieuo\formAPI\element\Button;
+use pocketmine\Player;
 
 class ListForm extends Form {
 
@@ -21,6 +22,16 @@ class ListForm extends Form {
         $this->content = $content;
         return $this;
     }
+
+    /**
+	 * @param string $content
+	 * @param bool $newLine
+	 * @return self
+	 */
+	public function appendContent(string $content, bool $newLine = true): self {
+		$this->content .= ($newLine ? "\n" : "").$content;
+		return $this;
+	}
 
     /**
      * @return string
@@ -53,6 +64,13 @@ class ListForm extends Form {
      */
     public function setButtons(array $buttons): self {
         $this->buttons = $buttons;
+        return $this;
+    }
+
+    public function forEach(array $inputs, callable $func): self {
+        foreach ($inputs as $input) {
+            $func($this, $input);
+        }
         return $this;
     }
 
@@ -90,5 +108,21 @@ class ListForm extends Form {
             $form["content"] = implode("\n", array_keys($this->messages))."\n".$form["content"];
         }
         return $form;
+    }
+
+    public function handleResponse(Player $player, $data): void {
+        $this->lastResponse = [$player, $data];
+        if ($data === null) {
+            parent::handleResponse($player, $data);
+            return;
+        }
+
+        $button = $this->getButton($data);
+        if ($button === null or $button->getOnClick() === null) {
+            parent::handleResponse($player, $data);
+            return;
+        }
+
+        call_user_func($button->getOnClick(), $player);
     }
 }
