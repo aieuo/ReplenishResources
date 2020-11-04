@@ -1,9 +1,11 @@
 name: ReplenishResources
-main: aieuo\ReplenishResources
+main: aieuo\replenish\ReplenishResources
 version: 2.4.2
 api: 3.0.0
 load: POSTWORLD
 author: aieuo
+softdepend:
+ - Mineflow
 commands:
  reso:
   description: 人工資源補充

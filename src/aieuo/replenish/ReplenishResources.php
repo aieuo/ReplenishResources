@@ -48,9 +48,17 @@ class ReplenishResources extends PluginBase implements Listener {
     /** @var float[][] */
     private $time;
 
-    public function onEnable(){
-        $this->getServer()->getPluginManager()->registerEvents($this,$this);
-        if(!file_exists($this->getDataFolder())) @mkdir($this->getDataFolder(), 0721, true);
+    /** @noinspection ReturnTypeCanBeDeclaredInspection */
+    public function onLoad() {
+        if (Server::getInstance()->getPluginManager()->getPlugin("Mineflow") !== null) {
+            $this->registerMineflowActions();
+        }
+    }
+
+    /** @noinspection ReturnTypeCanBeDeclaredInspection */
+    public function onEnable() {
+        $this->getServer()->getPluginManager()->registerEvents($this, $this);
+        if (!file_exists($this->getDataFolder())) @mkdir($this->getDataFolder(), 0721, true);
         $this->setting = new Config($this->getDataFolder()."setting.yml", Config::YAML, [
             "enable-wait" => true,
             "wait" => 60,
@@ -75,6 +83,10 @@ class ReplenishResources extends PluginBase implements Listener {
             $time = (float)$this->setting->get("auto-replenish-time", 60) * 20;
             $this->startAutoReplenishTask($time);
         }
+
+        if (Server::getInstance()->getPluginManager()->getPlugin("Mineflow") !== null) {
+            $this->registerMineflowLanguage();
+        }
     }
 
     /** @noinspection ReturnTypeCanBeDeclaredInspection */
@@ -82,8 +94,21 @@ class ReplenishResources extends PluginBase implements Listener {
         $this->setting->save();
     }
 
-    public function checkConfig() {
-        if(version_compare("2.4.0", $this->setting->get("version", ""), "<=")) return;
+    public function registerMineflowLanguage(): void {
+        foreach ($this->getResources() as $resource) {
+            $filenames = explode(".", $resource->getFilename());
+            if (($filenames[1] ?? "") === "ini") {
+                MineflowLanguage::add(parse_ini_file($resource->getPathname()), $filenames[0]);
+            }
+        }
+    }
+
+    public function registerMineflowActions(): void {
+        FlowItemFactory::register(new ReplenishResource());
+    }
+
+    public function checkConfig(): void {
+        if (version_compare("2.4.0", $this->setting->get("version", ""), "<=")) return;
         $version = $this->getDescription()->getVersion();
         $this->setting->set("version", $version);
         $resources = [];
