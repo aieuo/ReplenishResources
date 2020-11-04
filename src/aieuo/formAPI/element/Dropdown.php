@@ -47,7 +47,7 @@ class Dropdown extends Element {
      * @return self
      */
     public function setDefault(int $default): self {
-        $this->default = $default;
+        $this->default = $default >= 0 ? $default : 0;
         return $this;
     }
 
@@ -61,7 +61,7 @@ class Dropdown extends Element {
     public function jsonSerialize(): array {
         return [
             "type" => $this->type,
-            "text" => str_replace("\\n", "\n", $this->reflectHighlight($this->text)),
+            "text" => $this->extraText.$this->reflectHighlight($this->text),
             "options" => $this->options,
             "default" => $this->default,
         ];

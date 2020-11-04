@@ -8,14 +8,19 @@ class Input extends Element {
     protected $type = self::ELEMENT_INPUT;
 
     /** @var string */
-    private $placeholder = "";
+    private $placeholder;
     /** @var string */
-    private $default = "";
+    private $default;
 
-    public function __construct(string $text, string $placeholder = "", string $default = "") {
+    /** @var bool */
+    private $required;
+
+    public function __construct(string $text, string $placeholder = "", string $default = "", bool $required = false) {
         parent::__construct($text);
         $this->placeholder = $placeholder;
         $this->default = $default;
+
+        $this->required = $required;
     }
 
     /**
@@ -50,10 +55,14 @@ class Input extends Element {
         return $this->default;
     }
 
+    public function isRequired(): bool {
+        return $this->required;
+    }
+
     public function jsonSerialize(): array {
         return [
             "type" => $this->type,
-            "text" => str_replace("\\n", "\n", $this->reflectHighlight($this->text)),
+            "text" => $this->extraText.$this->reflectHighlight($this->text),
             "placeholder" => $this->placeholder,
             "default" => $this->default,
         ];

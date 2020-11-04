@@ -8,9 +8,9 @@ use pocketmine\Player;
 
 abstract class Form implements PMForm {
 
-    const MODAL_FORM = "modal";
-    const LIST_FORM = "form";
-    const CUSTOM_FORM = "custom_form";
+    public const MODAL_FORM = "modal";
+    public const LIST_FORM = "form";
+    public const CUSTOM_FORM = "custom_form";
 
     /** @var string */
     protected $type;
@@ -21,15 +21,17 @@ abstract class Form implements PMForm {
     private $name;
 
     /** @var callable|null */
-    private $onReceive = null;
+    private $onReceive;
     /* @var callable|null */
-    private $onClose = null;
+    private $onClose;
     /** @var array */
     private $args = [];
     /** @var array */
     protected $messages = [];
     /** @var array */
     protected $highlights = [];
+    /** @var array */
+    protected $lastResponse = [];
 
     public function __construct(string $title = "") {
         $this->title = $title;
@@ -144,6 +146,15 @@ abstract class Form implements PMForm {
     }
 
     /**
+     * @return $this
+     */
+    public function resetErrors(): self {
+        $this->messages = [];
+        $this->highlights = [];
+        return $this;
+    }
+
+    /**
      * @param Player $player
      * @return self
      */
@@ -163,7 +174,17 @@ abstract class Form implements PMForm {
      */
     abstract public function reflectErrors(array $form): array;
 
+    public function resend(array $errors = [], array $messages = []): void {
+        if (empty($this->lastResponse) or !($this->lastResponse[0] instanceof Player) or !$this->lastResponse[0]->isOnline()) return;
+
+        $this->resetErrors()
+            ->addMessages($messages)
+            ->addErrors($errors)
+            ->show($this->lastResponse[0]);
+    }
+
     public function handleResponse(Player $player, $data): void {
+        $this->lastResponse = [$player, $data];
         if ($data === null) {
             if (!is_callable($this->onClose)) return;
             call_user_func_array($this->onClose, array_merge([$player], $this->args));
