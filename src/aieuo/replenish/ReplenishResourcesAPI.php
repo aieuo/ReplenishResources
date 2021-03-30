@@ -106,6 +106,7 @@ class ReplenishResourcesAPI {
     public function replenish(Position $pos): void {
         $resource = $this->getResource($pos);
         if($resource === null) return;
+
         $ids = [];
         $total = 0;
         foreach($resource["id"] as $id) {
@@ -154,8 +155,8 @@ class ReplenishResourcesAPI {
                 if($id["min"] <= $rand and $rand <= $id["max"]) break;
             }
             if(!isset($id)) $id = $ids[array_rand($ids)];
-            $level->setBlockIdAt($x, $y, $z, $id["id"]);
-            $level->setBlockDataAt($x, $y, $z, $id["damage"]);
+            $level->setBlockIdAt($x, $y, $z, (int)$id["id"]);
+            $level->setBlockDataAt($x, $y, $z, (int)$id["damage"]);
         }
         $this->getOwner()->getScheduler()->scheduleDelayedTask(new class([$this, "setBlocks"], [$pos1, $pos2, $ids, $total, $limit, $period, $i, $j, $k]) extends Task {
             /** @var callable */
