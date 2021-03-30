@@ -378,6 +378,8 @@ class ReplenishResources extends PluginBase implements Listener {
         $ey = $data["endy"];
         $ez = $data["endz"];
         $level = $this->getServer()->getLevelByName($data["level"]);
+        if ($level === null) return 0;
+
         $count = 0;
         for ($x = $sx; $x <= $ex; $x++) {
             for ($y = $sy; $y <= $ey; $y++) {
