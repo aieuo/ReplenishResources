@@ -15,13 +15,13 @@ use aieuo\replenish\ReplenishResourcesAPI;
 class ReplenishResource extends FlowItem implements PositionFlowItem {
     use PositionFlowItemTrait;
 
-    protected $id = "replenishResource";
+    protected string $id = "replenishResource";
 
-    protected $name = "action.replenishResource.name";
-    protected $detail = "action.replenishResource.detail";
-    protected $detailDefaultReplace = ["position"];
+    protected string $name = "action.replenishResource.name";
+    protected string $detail = "action.replenishResource.detail";
+    protected array $detailDefaultReplace = ["position"];
 
-    protected $category = Category::PLUGIN;
+    protected string $category = Category::PLUGIN;
 
     public function __construct(string $position = "") {
         $this->setPositionVariableName($position);

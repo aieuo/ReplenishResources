@@ -2,12 +2,8 @@
 
 namespace aieuo\replenish;
 
-use aieuo\formAPI\CustomForm;
-use aieuo\formAPI\element\Button;
-use aieuo\formAPI\element\NumberInput;
-use aieuo\formAPI\element\Toggle;
-use aieuo\formAPI\ListForm;
 use aieuo\mineflow\flowItem\FlowItemFactory;
+use aieuo\mineflow\utils\Language as MineflowLanguage;
 use aieuo\replenish\mineflow\action\ReplenishResource;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
@@ -21,43 +17,35 @@ use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\TaskHandler;
 use pocketmine\Server;
 use pocketmine\utils\Config;
-use aieuo\mineflow\utils\Language as MineflowLanguage;
 
 class ReplenishResources extends PluginBase implements Listener {
 
-    /** @var TaskHandler|null */
-    private $taskHandler;
-
-    /* @var Config */
-    private $setting;
-
-    /* @var ReplenishResourcesAPI */
-    private $api;
+    private ?TaskHandler $taskHandler;
+    private Config $setting;
+    private ReplenishResourcesAPI $api;
 
     /** @var string[] */
-    private $break;
+    private array $break;
 
     /** @var Position[] */
-    private $pos1;
+    private array $pos1;
     /** @var Position[] */
-    private $pos2;
-
-    /** @var array */
-    private $tap;
+    private array $pos2;
+    private array $tap;
 
     /** @var float[][] */
-    private $time;
+    private array $time;
 
-    /** @noinspection ReturnTypeCanBeDeclaredInspection */
-    public function onLoad() {
+    private static bool $mineflowLoaded = false;
+
+    public function onLoad(): void {
         if (Server::getInstance()->getPluginManager()->getPlugin("Mineflow") !== null) {
             self::$mineflowLoaded = true;
             $this->registerMineflowActions();
         }
     }
 
-    /** @noinspection ReturnTypeCanBeDeclaredInspection */
-    public function onEnable() {
+    public function onEnable(): void {
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
         if (!file_exists($this->getDataFolder())) @mkdir($this->getDataFolder(), 0721, true);
         $this->setting = new Config($this->getDataFolder()."setting.yml", Config::YAML, [
@@ -90,8 +78,7 @@ class ReplenishResources extends PluginBase implements Listener {
         }
     }
 
-    /** @noinspection ReturnTypeCanBeDeclaredInspection */
-    public function onDisable() {
+    public function onDisable(): void {
         $this->setting->save();
     }
 
