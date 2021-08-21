@@ -20,7 +20,7 @@ use pocketmine\utils\Config;
 
 class ReplenishResources extends PluginBase implements Listener {
 
-    private ?TaskHandler $taskHandler;
+    private ?TaskHandler $taskHandler = null;
     private Config $setting;
     private ReplenishResourcesAPI $api;
 
