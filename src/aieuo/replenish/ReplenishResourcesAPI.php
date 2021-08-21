@@ -7,14 +7,12 @@ use pocketmine\scheduler\Task;
 use pocketmine\utils\Config;
 
 class ReplenishResourcesAPI {
-    private static $instance;
 
-    /** @var ReplenishResources */
-    private $owner;
-    /* @var Config */
-    private $setting;
-    /* @var Config */
-    private $resources;
+    private static ReplenishResourcesAPI $instance;
+
+    private ReplenishResources $owner;
+    private Config $setting;
+    private Config $resources;
 
     public function __construct(ReplenishResources $owner, Config $resources, Config $setting) {
         $this->owner = $owner;
