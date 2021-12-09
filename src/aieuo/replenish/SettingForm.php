@@ -7,7 +7,7 @@ use aieuo\mineflow\formAPI\element\Button;
 use aieuo\mineflow\formAPI\element\NumberInput;
 use aieuo\mineflow\formAPI\element\Toggle;
 use aieuo\mineflow\formAPI\ListForm;
-use pocketmine\Player;
+use pocketmine\player\Player;
 
 class SettingForm {
 
