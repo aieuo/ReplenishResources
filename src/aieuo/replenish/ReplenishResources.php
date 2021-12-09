@@ -10,9 +10,9 @@ use pocketmine\command\CommandSender;
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerInteractEvent;
-use pocketmine\level\Position;
+use pocketmine\world\Position;
 use pocketmine\math\Vector3;
-use pocketmine\Player;
+use pocketmine\player\Player;
 use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\TaskHandler;
 use pocketmine\Server;
@@ -127,7 +127,7 @@ class ReplenishResources extends PluginBase implements Listener {
     public function startAutoReplenishTask(int $time): void {
         if ($time === 0) {
             if ($this->taskHandler instanceof TaskHandler and !$this->taskHandler->isCancelled()) {
-                $this->getScheduler()->cancelTask($this->taskHandler->getTaskId());
+                $this->taskHandler->cancel();
             }
             $this->taskHandler = null;
             return;
@@ -135,7 +135,7 @@ class ReplenishResources extends PluginBase implements Listener {
 
         if ($this->taskHandler instanceof TaskHandler and !$this->taskHandler->isCancelled()) {
             if ($time === $this->taskHandler->getPeriod()) return;
-            $this->getScheduler()->cancelTask($this->taskHandler->getTaskId());
+            $this->taskHandler->cancel();
         }
 
         $this->taskHandler = $this->getScheduler()->scheduleRepeatingTask(new AutoReplenishTask(), $time);
@@ -173,7 +173,7 @@ class ReplenishResources extends PluginBase implements Listener {
                     $sender->sendMessage("まず/reso pos1と/reso pos2で範囲を設定してください");
                     return true;
                 }
-                if ($this->pos1[$name]->level->getFolderName() !== $this->pos2[$name]->level->getFolderName()) {
+                if ($this->pos1[$name]->world->getFolderName() !== $this->pos2[$name]->world->getFolderName()) {
                     $sender->sendMessage("pos1とpos2は同じワールドに設定してください");
                     return true;
                 }
@@ -315,75 +315,85 @@ class ReplenishResources extends PluginBase implements Listener {
     public function onBreak(BlockBreakEvent $event): void {
         $player = $event->getPlayer();
         $block = $event->getBlock();
+        $pos = $block->getPosition();
         $name = $player->getName();
         if (isset($this->break[$name])) {
-            $event->setCancelled();
+            $event->cancel();
             $type = $this->break[$name];
             switch ($type) {
                 case 'pos1':
                 case 'pos2':
                     $this->{$type}[$name] = $block;
-                    $player->sendMessage($type."を設定しました (".$block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName().")");
+                    $player->sendMessage($type."を設定しました (".$pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName().")");
                     break;
             }
             unset($this->break[$name]);
             return;
         }
 
-        if ((($block->getId() === 63 or $block->getId() === 68) and !$event->isCancelled()) and $this->api->existsResource($block)) {
-            if (!$player->isOp()) {
+        if ((($block->getId() === 63 or $block->getId() === 68) and !$event->isCancelled()) and $this->api->existsResource($block->getPosition())) {
+            if (!Server::getInstance()->isOp($player->getName())) {
                 $player->sendMessage("§cこの看板は壊せません");
-                $event->setCancelled();
+                $event->cancel();
                 return;
             }
             $player->sendMessage("補充看板を壊しました");
-            $this->api->removeResource($block);
+            $this->api->removeResource($pos);
         }
     }
 
     public function onTouch(PlayerInteractEvent $event): void {
         $player = $event->getPlayer();
         $block = $event->getBlock();
+        $pos = $block->getPosition();
         $name = $player->getName();
 
         if ($block->getId() !== 63 and $block->getId() !== 68) return;
 
         if (isset($this->tap[$name])) {
-            $event->setCancelled();
+            $event->cancel();
             switch ($this->tap[$name]["type"]) {
                 case 'add':
                     $ids = array_map(function ($id2) {
                         $ids2 = explode(":", $id2);
-                        return ["id" => $ids2[0], "damage" => $ids2[1] ?? 0, "per" => $ids2[2] ?? 100];
+                        return [
+                            "id" => $ids2[0],
+                            "damage" => (int)($ids2[1] ?? 0),
+                            "per" => (int)($ids2[2] ?? 100)
+                        ];
                     }, explode(",", $this->tap[$name]["id"]));
-                    $this->api->addResource($block, $this->pos1[$name], $this->pos2[$name], $ids);
+                    $this->api->addResource($pos, $this->pos1[$name], $this->pos2[$name], $ids);
                     $player->sendMessage("追加しました");
                     break;
                 case 'change':
-                    if (!$this->api->existsResource($block)) {
+                    if (!$this->api->existsResource($pos)) {
                         $player->sendMessage("その場所にはまだ追加されていません");
                         return;
                     }
                     $ids = array_map(function ($id2) {
                         $ids2 = explode(":", $id2);
-                        return ["id" => $ids2[0], "damage" => $ids2[1] ?? 0, "per" => $ids2[2] ?? 100];
+                        return [
+                            "id" => $ids2[0],
+                            "damage" => (int)($ids2[1] ?? 0),
+                            "per" => (int)($ids2[2] ?? 100)
+                        ];
                     }, explode(",", $this->tap[$name]["id"]));
-                    $this->api->updateResource($block, "id", $ids);
+                    $this->api->updateResource($pos, "id", $ids);
                     $player->sendMessage("変更しました");
                     break;
                 case 'del':
-                    if ($this->api->removeResource($block)) {
+                    if ($this->api->removeResource($pos)) {
                         $player->sendMessage("削除しました");
                     } else {
                         $player->sendMessage("その場所には登録されていません");
                     }
                     break;
                 case 'auto_add':
-                    if (!$this->api->existsResource($block)) {
+                    if (!$this->api->existsResource($pos)) {
                         $player->sendMessage("それは補充看板ではありません");
                         return;
                     }
-                    if (!$this->api->addAutoReplenishResource($block)) {
+                    if (!$this->api->addAutoReplenishResource($pos)) {
                         $player->sendMessage("すでに追加されています");
                         return;
                     }
@@ -391,7 +401,7 @@ class ReplenishResources extends PluginBase implements Listener {
                     if (!$this->setting->get("enable-auto-replenish")) $player->sendMessage("§e自動補充がオフになっています。/reso settingでオンにしてください");
                     break;
                 case 'auto_del':
-                    if (!$this->api->removeAutoReplenishResource($block)) {
+                    if (!$this->api->removeAutoReplenishResource($pos)) {
                         $player->sendMessage("まだ追加されていません");
                         return;
                     }
@@ -402,9 +412,9 @@ class ReplenishResources extends PluginBase implements Listener {
             return;
         }
 
-        if (!$this->api->existsResource($block)) return;
+        if (!$this->api->existsResource($pos)) return;
 
-        $place = $block->x.",".$block->y.",".$block->z.",".$block->level->getFolderName();
+        $place = $pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName();
 
         if ($this->setting->get("sneak", false) and !$player->isSneaking()) {
             $player->sendMessage("スニークしながらタップすると補充します");
@@ -417,12 +427,13 @@ class ReplenishResources extends PluginBase implements Listener {
                 return;
             }
         }
-        $resource = $this->api->getResource($block);
+        $resource = $this->api->getResource($pos);
         if ($this->setting->get("check-inside", false)) {
-            $players = $player->level->getPlayers();
+            $players = $player->getWorld()->getPlayers();
             $inside = false;
             foreach ($players as $p) {
-                if ($resource["level"] === $p->level->getFolderName() and $resource["startx"] <= floor($p->x) and floor($p->x) <= $resource["endx"] and $resource["starty"] <= floor($p->y) and floor($p->y) <= $resource["endy"] and $resource["startz"] <= floor($p->z) and floor($p->z) <= $resource["endz"]) {
+                $pp = $p->getPosition();
+                if ($resource["level"] === $p->getWorld()->getFolderName() and $resource["startx"] <= floor($pp->x) and floor($pp->x) <= $resource["endx"] and $resource["starty"] <= floor($pp->y) and floor($pp->y) <= $resource["endy"] and $resource["startz"] <= floor($pp->z) and floor($pp->z) <= $resource["endz"]) {
                     $p->sendTip("§e".$name."があなたのいる資源を補充しようとしています");
                     $inside = true;
                 }
@@ -441,10 +452,10 @@ class ReplenishResources extends PluginBase implements Listener {
             }
         }
         if ($this->setting->get("announcement")) $this->getServer()->broadcastMessage($name."さんが資源(".$place.")の補充を行います");
-        $this->api->replenish($block);
+        $this->api->replenish($pos);
     }
 
-    public function checkTime(string $name, string $type) {
+    public function checkTime(string $name, string $type): float|bool {
         if (!isset($this->time[$name][$type])) {
             $this->time[$name][$type] = microtime(true);
             return true;
@@ -464,7 +475,7 @@ class ReplenishResources extends PluginBase implements Listener {
         $ex = $data["endx"];
         $ey = $data["endy"];
         $ez = $data["endz"];
-        $level = $this->getServer()->getLevelByName($data["level"]);
+        $level = $this->getServer()->getWorldManager()->getWorldByName($data["level"]);
         if ($level === null) return 0;
 
         $count = 0;
