@@ -1,7 +1,8 @@
 <?php
 namespace aieuo\replenish;
 
-use pocketmine\level\Position;
+use pocketmine\block\BlockFactory;
+use pocketmine\world\Position;
 use pocketmine\math\Vector3;
 use pocketmine\scheduler\Task;
 use pocketmine\utils\Config;
@@ -38,24 +39,24 @@ class ReplenishResourcesAPI {
     }
 
     public function existsResource(Position $pos): ?bool {
-        if ($pos->level === null) return false;
-        return $this->resources->exists($pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName());
+        if ($pos->world === null) return false;
+        return $this->resources->exists($pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName());
     }
 
     public function getResource(Position $pos): ?array {
-        if ($pos->level === null) return null;
-        return $this->resources->get($pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName(), null);
+        if ($pos->world === null) return null;
+        return $this->resources->get($pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName(), null);
     }
 
     public function addResource(Position $sign, Position $pos1, Position $pos2, array $ids): void {
-        $this->resources->set($sign->x.",".$sign->y.",".$sign->z.",".$sign->level->getFolderName(), [
+        $this->resources->set($sign->x.",".$sign->y.",".$sign->z.",".$sign->world->getFolderName(), [
             "startx" => min($pos1->x, $pos2->x),
             "starty" => min($pos1->y, $pos2->y),
             "startz" => min($pos1->z, $pos2->z),
             "endx" => max($pos1->x, $pos2->x),
             "endy" => max($pos1->y, $pos2->y),
             "endz" => max($pos1->z, $pos2->z),
-            "level" => $pos1->level->getFolderName(),
+            "level" => $pos1->world->getFolderName(),
             "id" => $ids,
         ]);
         $this->resources->save();
@@ -65,14 +66,14 @@ class ReplenishResourcesAPI {
         $resource = $this->getResource($pos);
         if($resource === null) return false;
         $resource[$key] = $data;
-        $this->resources->set($pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName(), $resource);
+        $this->resources->set($pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName(), $resource);
         $this->resources->save();
         return true;
     }
 
     public function removeResource(Position $pos): bool {
         if(!$this->existsResource($pos)) return false;
-        $this->resources->remove($pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName());
+        $this->resources->remove($pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName());
         $this->resources->save();
         return true;
     }
@@ -83,7 +84,7 @@ class ReplenishResourcesAPI {
 
     public function addAutoReplenishResource(Position $pos): bool {
         $resources = $this->getAutoReplenishResources();
-        $add = $pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName();
+        $add = $pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName();
         if(in_array($add, $resources, true)) return false;
         $this->setting->set("auto-replenish-resources", array_merge($resources, [$add]));
         $this->setting->save();
@@ -92,7 +93,7 @@ class ReplenishResourcesAPI {
 
     public function removeAutoReplenishResource(Position $pos): bool {
         $resources = $this->getAutoReplenishResources();
-        $remove = $pos->x.",".$pos->y.",".$pos->z.",".$pos->level->getFolderName();
+        $remove = $pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName();
         if(!in_array($remove, $resources, true)) return false;
         $resources = array_diff($resources, [$remove]);
         $resources = array_values($resources);
@@ -113,7 +114,7 @@ class ReplenishResourcesAPI {
             $ids[] = ["id" => $id["id"], "damage" => $id["damage"], "min" => $min, "max" => $total];
         }
         $this->setBlocks(
-            new Position($resource["startx"], $resource["starty"], $resource["startz"], $this->getOwner()->getServer()->getLevelByName($resource["level"])),
+            new Position($resource["startx"], $resource["starty"], $resource["startz"], $this->getOwner()->getServer()->getWorldManager()->getWorldByName($resource["level"])),
             new Vector3($resource["endx"], $resource["endy"], $resource["endz"]),
             $ids,
             $total,
@@ -123,7 +124,8 @@ class ReplenishResourcesAPI {
     }
 
     public function setBlocks(Position $pos1, Vector3 $pos2, array $ids, int $total, int $limit, int $period, int $i = -1, int $j = 0, int $k = 0): bool {
-        $level = $pos1->level;
+        $factory = BlockFactory::getInstance();
+        $world = $pos1->world;
         $startX = $pos1->x;
         $startY = $pos1->y;
         $startZ = $pos1->z;
@@ -153,21 +155,19 @@ class ReplenishResourcesAPI {
                 if($id["min"] <= $rand and $rand <= $id["max"]) break;
             }
             if(!isset($id)) $id = $ids[array_rand($ids)];
-            $level->setBlockIdAt($x, $y, $z, (int)$id["id"]);
-            $level->setBlockDataAt($x, $y, $z, (int)$id["damage"]);
+
+            $world->setBlockAt($x, $y, $z, $factory->get((int)$id["id"], (int)$id["damage"]));
         }
         $this->getOwner()->getScheduler()->scheduleDelayedTask(new class([$this, "setBlocks"], [$pos1, $pos2, $ids, $total, $limit, $period, $i, $j, $k]) extends Task {
             /** @var callable */
             private $callable;
-            /** @var array  */
-            private $data;
+            private array $data;
             public function __construct(callable $callable, array $data) {
                 $this->callable = $callable;
                 $this->data = $data;
             }
 
-            /** @noinspection ReturnTypeCanBeDeclaredInspection */
-            public function onRun(int $currentTick) {
+            public function onRun(): void {
                 call_user_func_array($this->callable, $this->data);
             }
         }, $period);

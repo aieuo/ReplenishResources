@@ -7,7 +7,7 @@ use aieuo\mineflow\formAPI\element\Button;
 use aieuo\mineflow\formAPI\element\NumberInput;
 use aieuo\mineflow\formAPI\element\Toggle;
 use aieuo\mineflow\formAPI\ListForm;
-use pocketmine\Player;
+use pocketmine\player\Player;
 
 class SettingForm {
 
@@ -19,34 +19,34 @@ class SettingForm {
 
     public function sendSettingForm(Player $player, array $messages = []): void {
         if (!$this->owner->getSetting()->get("sneak")) {
-            $sneak = "[スニーク] 今は§cOFF§r (スニークしなくても反応します)";
+            $sneak = "[スニーク] §cOFF§r (スニークしなくても反応します)";
         } else {
-            $sneak = "[スニーク] 今は§bON§r (スニークしないと反応しません)";
+            $sneak = "[スニーク] §bON§r (スニークしないと反応しません)";
         }
         if (!$this->owner->getSetting()->get("announcement")) {
-            $announcement = "[アナウンス] 今は§cOFF§r (補充時にみんなに知らせません)";
+            $announcement = "[アナウンス] §cOFF§r (補充時にみんなに知らせません)";
         } else {
-            $announcement = "[アナウンス] 今は§bON§r (補充時にみんなに知らせます)";
+            $announcement = "[アナウンス] §bON§r (補充時にみんなに知らせます)";
         }
         if (($time = (float)$this->owner->getSetting()->get("wait")) <= 0 or !$this->owner->getSetting()->get("enable-wait")) {
-            $wait = "[連続補充の制限] 今は§cOFF§r (連続補充を制限しません)";
+            $wait = "[連続補充の制限] §cOFF§r (連続補充を制限しません)";
         } else {
-            $wait = "[連続補充の制限] 今は§bON§r (同じ看板のタップを".$time."秒間制限します)";
+            $wait = "[連続補充の制限] §bON§r (同じ看板のタップを".$time."秒間制限します)";
         }
         if (($check = (int)$this->owner->getSetting()->get("count")) === -1 or !$this->owner->getSetting()->get("enable-count")) {
-            $count = "[残さずに掘る] 今は§cOFF§r (ブロックが残っていても補充します)";
+            $count = "[残さずに掘る] §cOFF§r (ブロックが残っていても補充します)";
         } else {
-            $count = "[残さずに掘る] 今は§bON§r (残っているブロックが".$check."個以下の時だけ補充します)";
+            $count = "[残さずに掘る] §bON§r (残っているブロックが".$check."個以下の時だけ補充します)";
         }
         if (!$this->owner->getSetting()->get("check-inside")) {
-            $inside = "[資源内のプレイヤー確認] 今は§cOFF§r (資源内にプレイヤーがいても補充します)";
+            $inside = "[資源内のプレイヤー確認] §cOFF§r (資源内にプレイヤーがいても補充します)";
         } else {
-            $inside = "[資源内のプレイヤー確認] 今は§bON§r (資源内にプレイヤーがいると補充しません)";
+            $inside = "[資源内のプレイヤー確認] §bON§r (資源内にプレイヤーがいると補充しません)";
         }
         if (!$this->owner->getSetting()->get("enable-auto-replenish")) {
-            $autoReplenish = "[自動補充] 今は§cOFF§r (設定した資源を定期的に補充しません)";
+            $autoReplenish = "[自動補充] §cOFF§r (設定した資源を定期的に補充しません)";
         } else {
-            $autoReplenish = "[自動補充] 今は§bON§r (設定した資源を".$this->owner->getSetting()->get("auto-replenish-time")."に1回補充します)";
+            $autoReplenish = "[自動補充] §bON§r (設定した資源を".$this->owner->getSetting()->get("auto-replenish-time")."に1回補充します)";
         }
         $place = "[補充] ".$this->owner->getSetting()->get("tick-place", 100)."ブロック置いて".$this->owner->getSetting()->get("period")."tick待つ";
 

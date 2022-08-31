@@ -1,13 +1,17 @@
 name: ReplenishResources
 main: aieuo\replenish\ReplenishResources
 version: 2.7.0
-api: 3.21.0
+api: 4.0.0
 load: POSTWORLD
 author: aieuo
 softdepend:
  - Mineflow
+permissions:
+  replenishResources.command.reso:
+   default: op
+   description: "/reso command"
 commands:
  reso:
   description: 人工資源補充
   usage: /reso <pos1 | pos2 | add | del | change | auto | setting>
-  permission: op
+  permission: "replenishResources.command.reso"
