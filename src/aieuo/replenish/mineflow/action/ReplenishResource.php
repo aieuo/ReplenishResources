@@ -5,9 +5,9 @@ namespace aieuo\replenish\mineflow\action;
 use aieuo\mineflow\flowItem\base\PositionFlowItem;
 use aieuo\mineflow\flowItem\base\PositionFlowItemTrait;
 use aieuo\mineflow\flowItem\FlowItem;
+use aieuo\mineflow\flowItem\FlowItemCategory;
 use aieuo\mineflow\flowItem\FlowItemExecutor;
 use aieuo\mineflow\formAPI\element\mineflow\PositionVariableDropdown;
-use aieuo\mineflow\utils\Category;
 use aieuo\mineflow\utils\Language;
 use aieuo\replenish\ReplenishResourcesAPI;
 
@@ -21,7 +21,7 @@ class ReplenishResource extends FlowItem implements PositionFlowItem {
     protected string $detail = "action.replenishResource.detail";
     protected array $detailDefaultReplace = ["position"];
 
-    protected string $category = Category::PLUGIN;
+    protected string $category = FlowItemCategory::PLUGIN;
 
     public function __construct(string $position = "") {
         $this->setPositionVariableName($position);
