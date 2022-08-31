@@ -10,13 +10,13 @@ use pocketmine\command\CommandSender;
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerInteractEvent;
-use pocketmine\world\Position;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
 use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\TaskHandler;
 use pocketmine\Server;
 use pocketmine\utils\Config;
+use pocketmine\world\Position;
 
 class ReplenishResources extends PluginBase implements Listener {
 
@@ -323,7 +323,7 @@ class ReplenishResources extends PluginBase implements Listener {
             switch ($type) {
                 case 'pos1':
                 case 'pos2':
-                    $this->{$type}[$name] = $block;
+                    $this->{$type}[$name] = $block->getPosition();
                     $player->sendMessage($type."を設定しました (".$pos->x.",".$pos->y.",".$pos->z.",".$pos->world->getFolderName().")");
                     break;
             }
